@@ -3,11 +3,12 @@ import './App.css'
 import { useState, useEffect } from 'react';
 import { useSound } from './hooks/useSound';
 import { useRecording } from './hooks/useRecording';
+import { useAgent } from './hooks/useAgent';
 import { Piano } from './components/Piano';
 import { RecordingsList } from './components/RecordingsList';
 import { PresetSelect } from './components/PresetSelect';
 import { Button } from '@/components/ui/button';
-import { Mic, CheckCircle, AlertCircle, PianoIcon, Settings2 } from 'lucide-react';
+import { Mic, CheckCircle, AlertCircle, PianoIcon, Settings2, Square, VolumeX, Volume2, Loader2, BookHeart } from 'lucide-react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ThemeProvider } from './components/theme-provider';
 import { ModeToggle } from './components/mode-toggle';
@@ -23,6 +24,7 @@ function App() {
   const [isSoundOn, setIsSoundOn] = useState(false);
   const [showCountdown, setShowCountdown] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isCoraConnecting, setIsCoraConnecting] = useState(false);
   const { session } = useAuth();
   const userId = session?.user?.id;
   const { 
@@ -38,6 +40,18 @@ function App() {
     releaseTime,
     setReleaseTime
   } = useSound();
+  
+  // Initialize voice agent with piano controls
+  const { 
+    isActive: isCoraActive, 
+    isConnected: isCoraConnected, 
+    startSession: startCoraSession, 
+    stopSession: stopCoraSession, 
+    error: coraError,
+    muteSession: muteCoraSession,
+    unmuteSession: unmuteCoraSession,
+    isMuted: isCoraSessionMuted
+  } = useAgent({ playNote, stopNote, initializeAudio });
   const { 
     isRecording, 
     recordings, 
@@ -88,6 +102,13 @@ function App() {
     };
   }, [soundReady, initializeAudio]);
 
+  // Handle Cora connection state changes
+  useEffect(() => {
+    if (isCoraConnected && isCoraConnecting) {
+      setIsCoraConnecting(false);
+    }
+  }, [isCoraConnected, isCoraConnecting]);
+
   const handleNoteOff = (note: number) => {
     console.log(`App: handleNoteOff called with note=${note}, isRecording=${isRecording}`);
     recordEvent('off', note, 0);
@@ -114,6 +135,34 @@ function App() {
     } else {
       stopPlayback(); // stop any playback
       setShowCountdown(true); // Start countdown
+    }
+  };
+
+  const toggleCora = async () => {
+    if (isCoraActive) {
+      stopCoraSession();
+      setIsCoraConnecting(false);
+    } else {
+      setIsCoraConnecting(true);
+      try {
+        // Initialize audio first if needed
+        if (!soundReady) {
+          await initializeAudio();
+        }
+        await startCoraSession();
+        // Connection state will be handled by the useAgent hook
+      } catch (error) {
+        console.error('Failed to start Cora:', error);
+        setIsCoraConnecting(false);
+      }
+    }
+  };
+
+  const toggleCoraMute = () => {
+    if (isCoraSessionMuted) {
+      unmuteCoraSession();
+    } else {
+      muteCoraSession();
     }
   };
 
@@ -161,6 +210,64 @@ function App() {
               >
                 <Settings2 className="w-5 h-5" />
               </Button>
+              
+              {/* Learn with Cora Buttons */}
+              {!isCoraActive && !isCoraConnecting && (
+                <Button 
+                  variant="secondary"
+                  onClick={toggleCora}
+                  className="transition-all duration-200
+                    dark:bg-gradient-to-r dark:from-indigo-900 dark:via-slate-800 dark:to-indigo-950 dark:text-indigo-100 dark:border-indigo-600 dark:shadow-lg dark:shadow-indigo-900/30
+                    bg-gradient-to-r from-indigo-100 via-slate-100 to-white text-indigo-900 border border-indigo-300 shadow-lg shadow-indigo-200/40
+                    hover:from-indigo-200 hover:to-indigo-100 hover:text-indigo-800 hover:border-indigo-400
+                    dark:hover:from-indigo-800 dark:hover:to-indigo-900 dark:hover:text-indigo-50 dark:hover:border-indigo-400
+                    focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:outline-none
+                    active:scale-100 active:shadow-md
+                    hover:scale-105 hover:shadow-xl"
+                  title={coraError || 'Learn with Cora'}
+                >
+                  <BookHeart className="w-4 h-4 mr-2 text-indigo-500 group-hover:text-indigo-700 dark:text-indigo-300 dark:group-hover:text-indigo-100 transition-colors duration-200" />
+                  <span className="font-semibold tracking-wide">Learn with Cora</span>
+                </Button>
+              )}
+              
+              {isCoraConnecting && (
+                <Button 
+                  size="default"
+                  variant="secondary"
+                  disabled
+                  className="transition-all duration-200"
+                  title="Connecting to Cora..."
+                >
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Connecting...
+                </Button>
+              )}
+              
+              {isCoraActive && (
+                <div className="flex items-center gap-1">
+                  <Button 
+                    size="icon"
+                    variant="destructive"
+                    onClick={toggleCora}
+                    className="transition-all duration-200"
+                    title="Stop Learning with Cora"
+                  >
+                    <Square className="w-4 h-4" />
+                  </Button>
+                  
+                  <Button 
+                    size="icon"
+                    variant={isCoraSessionMuted ? "outline" : "secondary"}
+                    onClick={toggleCoraMute}
+                    className="transition-all duration-200"
+                    title={isCoraSessionMuted ? "Unmute Cora" : "Mute Cora"}
+                  >
+                    {isCoraSessionMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                  </Button>
+                </div>
+              )}
+              
               <Button 
                 size="icon"
                 variant={isRecording ? "destructive" : "default"}

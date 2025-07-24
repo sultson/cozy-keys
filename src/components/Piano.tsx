@@ -550,12 +550,32 @@ export function Piano({
       window.stopPlaybackWithVisualization = () => {
         clearPlaybackVisualization();
       };
+
+      // NEW: Expose functions for voice agent visual feedback
+      window.animatePianoKey = (note: number, isPressed: boolean) => {
+        if (isPressed) {
+          activeNotesRef.current.add(note);
+        } else {
+          activeNotesRef.current.delete(note);
+        }
+        animateKey(note, isPressed);
+      };
+
+      window.stopAllPianoAnimations = () => {
+        // Stop all active note animations
+        activeNotesRef.current.forEach((note) => {
+          animateKey(note, false);
+        });
+        activeNotesRef.current.clear();
+      };
     }
     
     return () => {
       if (typeof window !== 'undefined') {
         delete window.startSynchronizedPlayback;
         delete window.stopPlaybackWithVisualization;
+        delete window.animatePianoKey;
+        delete window.stopAllPianoAnimations;
       }
     };
   }, [clearPlaybackVisualization, animateKey]);
@@ -755,5 +775,7 @@ declare global {
     Tone?: typeof import('tone');
     startSynchronizedPlayback?: (recording: Recording, audioElement: HTMLAudioElement) => void;
     stopPlaybackWithVisualization?: () => void;
+    animatePianoKey?: (note: number, isPressed: boolean) => void;
+    stopAllPianoAnimations?: () => void;
   }
 }
