@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
-import { RealtimeAgent, RealtimeSession, tool } from '@openai/agents/realtime';
 import { z } from 'zod';
 import supabase from '@/lib/supabase';
+import { useConversation } from '@elevenlabs/react';
+
 
 interface UseAgentReturn {
   isActive: boolean;
@@ -12,6 +13,7 @@ interface UseAgentReturn {
   muteSession: () => void;
   unmuteSession: () => void;
   isMuted: boolean;
+  playChordTool: (params: z.infer<typeof playChordParameters>) => Promise<string>;
 }
 
 // Define the interface for accessing piano functions
@@ -21,13 +23,20 @@ interface PianoControls {
   initializeAudio: () => Promise<void>;
 }
 
+// Tool for playing multiple notes (chords)
+const playChordParameters = z.object({
+  notes: z.array(z.string()).describe("Array of note names with octaves (e.g., ['C4', 'E4', 'G4'])"),
+  velocity: z.number().min(1).max(127).default(100).describe("Velocity for all notes (1-127)"),
+  duration: z.number().min(0.1).max(10).default(2).describe("Duration in seconds")
+});
+
 export function useAgent(pianoControls: PianoControls): UseAgentReturn {
   const [isActive, setIsActive] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
-  const sessionRef = useRef<RealtimeSession | null>(null);
   const activeNotesRef = useRef<Set<number>>(new Set());
+  const conversation = useConversation();
 
   // Helper function to convert note names to MIDI numbers
   const noteNameToMidi = useCallback((noteName: string): number => {
@@ -46,64 +55,19 @@ export function useAgent(pianoControls: PianoControls): UseAgentReturn {
     return (parseInt(octave) + 1) * 12 + noteNumber;
   }, []);
 
-  // Tool for playing a single note
-  const playNoteParameters = z.object({
-    note: z.string().describe("Note name with octave (e.g., 'C4', 'F#3', 'Bb5')"),
-    velocity: z.number().min(1).max(127).default(100).describe("Note velocity (1-127)"),
-    duration: z.number().min(0.1).max(10).default(1).describe("Duration in seconds")
-  });
 
-  const playNoteTool = tool({
-    name: 'play_note',
-    description: 'Play a single piano note with specified velocity and duration',
-    parameters: playNoteParameters,
-    execute: async ({ note, velocity, duration }: z.infer<typeof playNoteParameters>) => {
+
+ 
+
+  console.log(playChordParameters)
+
+  
+  const playChordTool =  async ({notes, velocity = 100, duration = 2}: z.infer<typeof playChordParameters>) => {
       try {
-        const midiNote = noteNameToMidi(note);
-        
-        // Initialize audio if needed
-        await pianoControls.initializeAudio();
-        
-        // Play the note with visual feedback
-        pianoControls.playNote(midiNote, velocity);
-        activeNotesRef.current.add(midiNote);
-        
-        // Trigger visual animation
-        if (typeof window !== 'undefined' && window.animatePianoKey) {
-          window.animatePianoKey(midiNote, true);
+        if (!notes || !velocity || !duration) {
+          throw new Error('Missing required parameters');
         }
-        
-        // Stop the note after duration
-        setTimeout(() => {
-          pianoControls.stopNote(midiNote);
-          activeNotesRef.current.delete(midiNote);
-          
-          // Stop visual animation
-          if (typeof window !== 'undefined' && window.animatePianoKey) {
-            window.animatePianoKey(midiNote, false);
-          }
-        }, duration * 1000);
-        
-        return `Played ${note} with velocity ${velocity} for ${duration} seconds`;
-      } catch (error) {
-        return `Error playing note: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      }
-    }
-  });
 
-  // Tool for playing multiple notes (chords)
-  const playChordParameters = z.object({
-    notes: z.array(z.string()).describe("Array of note names with octaves (e.g., ['C4', 'E4', 'G4'])"),
-    velocity: z.number().min(1).max(127).default(100).describe("Velocity for all notes (1-127)"),
-    duration: z.number().min(0.1).max(10).default(2).describe("Duration in seconds")
-  });
-
-  const playChordTool = tool({
-    name: 'play_chord',
-    description: 'Play multiple piano notes simultaneously to form a chord',
-    parameters: playChordParameters,
-    execute: async ({ notes, velocity, duration }: z.infer<typeof playChordParameters>) => {
-      try {
         // Initialize audio if needed
         await pianoControls.initializeAudio();
         
@@ -137,95 +101,141 @@ export function useAgent(pianoControls: PianoControls): UseAgentReturn {
       } catch (error) {
         return `Error playing chord: ${error instanceof Error ? error.message : 'Unknown error'}`;
       }
-    }
-  });
+  }
+
+
+  // TODO: Reimplement for elevenlabs
+    // Tool for playing a single note
+  // const playNoteParameters = z.object({
+  //   note: z.string().describe("Note name with octave (e.g., 'C4', 'F#3', 'Bb5')"),
+  //   velocity: z.number().min(1).max(127).default(100).describe("Note velocity (1-127)"),
+  //   duration: z.number().min(0.1).max(10).default(1).describe("Duration in seconds")
+  // });
+
+  // const playNoteTool = tool({
+  //   name: 'play_note',
+  //   description: 'Play a single piano note with specified velocity and duration',
+  //   parameters: playNoteParameters,
+  //   execute: async ({ note, velocity, duration }: z.infer<typeof playNoteParameters>) => {
+  //     try {
+  //       const midiNote = noteNameToMidi(note);
+        
+  //       // Initialize audio if needed
+  //       await pianoControls.initializeAudio();
+        
+  //       // Play the note with visual feedback
+  //       pianoControls.playNote(midiNote, velocity);
+  //       activeNotesRef.current.add(midiNote);
+        
+  //       // Trigger visual animation
+  //       if (typeof window !== 'undefined' && window.animatePianoKey) {
+  //         window.animatePianoKey(midiNote, true);
+  //       }
+        
+  //       // Stop the note after duration
+  //       setTimeout(() => {
+  //         pianoControls.stopNote(midiNote);
+  //         activeNotesRef.current.delete(midiNote);
+          
+  //         // Stop visual animation
+  //         if (typeof window !== 'undefined' && window.animatePianoKey) {
+  //           window.animatePianoKey(midiNote, false);
+  //         }
+  //       }, duration * 1000);
+        
+  //       return `Played ${note} with velocity ${velocity} for ${duration} seconds`;
+  //     } catch (error) {
+  //       return `Error playing note: ${error instanceof Error ? error.message : 'Unknown error'}`;
+  //     }
+  //   }
+  // });
 
   // Tool for playing a sequence of chords or notes
-  const playSequenceParameters = z.object({
-    sequence: z.array(z.object({
-      notes: z.array(z.string()).describe("Note names for this step"),
-      velocity: z.number().min(1).max(127).default(100),
-      duration: z.number().min(0.1).max(10).default(1),
-      delay: z.number().min(0).max(5).default(0).describe("Delay before playing this step")
-    })).describe("Sequence of chords/notes to play"),
-  });
+  // const playSequenceParameters = z.object({
+  //   sequence: z.array(z.object({
+  //     notes: z.array(z.string()).describe("Note names for this step"),
+  //     velocity: z.number().min(1).max(127).default(100),
+  //     duration: z.number().min(0.1).max(10).default(1),
+  //     delay: z.number().min(0).max(5).default(0).describe("Delay before playing this step")
+  //   })).describe("Sequence of chords/notes to play"),
+  // });
 
-  const playSequenceTool = tool({
-    name: 'play_sequence',
-    description: 'Play a sequence of chords or notes with specified timing',
-    parameters: playSequenceParameters,
-    execute: async ({ sequence }: z.infer<typeof playSequenceParameters>) => {
-      try {
-        await pianoControls.initializeAudio();
+  // const playSequenceTool = tool({
+  //   name: 'play_sequence',
+  //   description: 'Play a sequence of chords or notes with specified timing',
+  //   parameters: playSequenceParameters,
+  //   execute: async ({ sequence }: z.infer<typeof playSequenceParameters>) => {
+  //     try {
+  //       await pianoControls.initializeAudio();
         
-        let totalTime = 0;
-        const result: string[] = [];
+  //       let totalTime = 0;
+  //       const result: string[] = [];
         
-        sequence.forEach((step, index: number) => {
-          setTimeout(() => {
-            const midiNotes = step.notes.map((note: string) => noteNameToMidi(note));
+  //       sequence.forEach((step, index: number) => {
+  //         setTimeout(() => {
+  //           const midiNotes = step.notes.map((note: string) => noteNameToMidi(note));
             
-            // Play all notes in this step with visual feedback
-            midiNotes.forEach((midiNote: number) => {
-              pianoControls.playNote(midiNote, step.velocity);
-              activeNotesRef.current.add(midiNote);
+  //           // Play all notes in this step with visual feedback
+  //           midiNotes.forEach((midiNote: number) => {
+  //             pianoControls.playNote(midiNote, step.velocity);
+  //             activeNotesRef.current.add(midiNote);
               
-              // Trigger visual animation
-              if (typeof window !== 'undefined' && window.animatePianoKey) {
-                window.animatePianoKey(midiNote, true);
-              }
-            });
+  //             // Trigger visual animation
+  //             if (typeof window !== 'undefined' && window.animatePianoKey) {
+  //               window.animatePianoKey(midiNote, true);
+  //             }
+  //           });
             
-            // Stop notes after duration
-            setTimeout(() => {
-              midiNotes.forEach((midiNote: number) => {
-                pianoControls.stopNote(midiNote);
-                activeNotesRef.current.delete(midiNote);
+  //           // Stop notes after duration
+  //           setTimeout(() => {
+  //             midiNotes.forEach((midiNote: number) => {
+  //               pianoControls.stopNote(midiNote);
+  //               activeNotesRef.current.delete(midiNote);
                 
-                // Stop visual animation
-                if (typeof window !== 'undefined' && window.animatePianoKey) {
-                  window.animatePianoKey(midiNote, false);
-                }
-              });
-            }, step.duration * 1000);
+  //               // Stop visual animation
+  //               if (typeof window !== 'undefined' && window.animatePianoKey) {
+  //                 window.animatePianoKey(midiNote, false);
+  //               }
+  //             });
+  //           }, step.duration * 1000);
             
-          }, totalTime + step.delay * 1000);
+  //         }, totalTime + step.delay * 1000);
           
-          totalTime += (step.delay + step.duration) * 1000;
-          result.push(`Step ${index + 1}: [${step.notes.join(', ')}]`);
-        });
+  //         totalTime += (step.delay + step.duration) * 1000;
+  //         result.push(`Step ${index + 1}: [${step.notes.join(', ')}]`);
+  //       });
         
-        return `Playing sequence: ${result.join(' -> ')}`;
-      } catch (error) {
-        return `Error playing sequence: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      }
-    }
-  });
+  //       return `Playing sequence: ${result.join(' -> ')}`;
+  //     } catch (error) {
+  //       return `Error playing sequence: ${error instanceof Error ? error.message : 'Unknown error'}`;
+  //     }
+  //   }
+  // });
 
   // Tool to stop all currently playing notes
-  const stopAllNotesTool = tool({
-    name: 'stop_all_notes',
-    description: 'Stop all currently playing piano notes',
-    parameters: z.object({}),
-    execute: async () => {
-      try {
-        // Stop all active notes and animations
-        activeNotesRef.current.forEach((midiNote: number) => {
-          pianoControls.stopNote(midiNote);
-        });
-        activeNotesRef.current.clear();
+  // const stopAllNotesTool = tool({
+  //   name: 'stop_all_notes',
+  //   description: 'Stop all currently playing piano notes',
+  //   parameters: z.object({}),
+  //   execute: async () => {
+  //     try {
+  //       // Stop all active notes and animations
+  //       activeNotesRef.current.forEach((midiNote: number) => {
+  //         pianoControls.stopNote(midiNote);
+  //       });
+  //       activeNotesRef.current.clear();
         
-        // Stop all visual animations
-        if (typeof window !== 'undefined' && window.stopAllPianoAnimations) {
-          window.stopAllPianoAnimations();
-        }
+  //       // Stop all visual animations
+  //       if (typeof window !== 'undefined' && window.stopAllPianoAnimations) {
+  //         window.stopAllPianoAnimations();
+  //       }
         
-        return 'Stopped all playing notes';
-      } catch (error) {
-        return `Error stopping notes: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      }
-    }
-  });
+  //       return 'Stopped all playing notes';
+  //     } catch (error) {
+  //       return `Error stopping notes: ${error instanceof Error ? error.message : 'Unknown error'}`;
+  //     }
+  //   }
+  // });
 
   const startSession = useCallback(async () => {
     try {
@@ -233,7 +243,7 @@ export function useAgent(pianoControls: PianoControls): UseAgentReturn {
       
       // Check for API key
 
-      const { data, error } = await supabase.functions.invoke('cora/session', {
+      const { data, error } = await supabase.functions.invoke('cora/conversation-token', {
         method: 'GET'
       })
       if (error) {
@@ -241,15 +251,10 @@ export function useAgent(pianoControls: PianoControls): UseAgentReturn {
       }
 
       console.log(data)
-
-      const apiKey = data?.client_secret?.value
-      const model = data?.model
-      const voice = data?.voice
-      const instructions = data?.instructions
-      const turnDetection = data?.turn_detection
+      const conversationToken = data
 
 
-      if (!apiKey) {
+      if (!conversationToken) {
         throw new Error('OpenAI API key not found. Please set VITE_OPENAI_KEY.');
       }
 
@@ -260,43 +265,17 @@ export function useAgent(pianoControls: PianoControls): UseAgentReturn {
         throw new Error('Microphone access denied. Please allow microphone access to use Cora.');
       }
 
-      // Create the agent
-      const agent = new RealtimeAgent({
-        name: 'Cora',
-        instructions,
-        tools: [playNoteTool, playChordTool, playSequenceTool, stopAllNotesTool],
-        
-      });
-
-      // Create session with proper configuration based on docs
-      const session = new RealtimeSession(agent, {
-        model,
-        config: {
-          turnDetection,
-          voice
-        }
+      await conversation.startSession({
+        conversationToken,
+        connectionType: "webrtc",
+        clientTools: { playChordTool }
       });
 
 
-
-      // Connect to OpenAI first, then set up event listeners
-      await session.connect({ apiKey });
-      sessionRef.current = session;
       setIsActive(true);
       setIsConnected(true);
       
-      // Set up event listeners after connection
-      session.on('audio_interrupted', () => {
-        console.log('Audio interrupted');
-      });
 
-      session.on('history_updated', (history) => {
-        console.log('History updated:', history.length, 'items');
-      });
-      
-      // Send initial greeting
-      session.sendMessage("Hello! I'm Cora, your piano teacher. What would you like to learn about music today?");
-      
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to start Cora';
       setError(errorMessage);
@@ -304,34 +283,23 @@ export function useAgent(pianoControls: PianoControls): UseAgentReturn {
       setIsActive(false);
       setIsConnected(false);
     }
-  }, [pianoControls, playNoteTool, playChordTool, playSequenceTool, stopAllNotesTool, noteNameToMidi]);
+  }, [conversation, playChordTool]);
 
   const muteSession = useCallback(() => {
-    if (sessionRef.current && !isMuted) {
-      try {
-        // Mute the session audio output
-        sessionRef.current.mute(true);
-        setIsMuted(true);
-      } catch (error) {
-        console.error('Error muting session:', error);
-      }
+    if (conversation.status === 'connected') {
+      conversation.micMuted = true
+      setIsMuted(true)
     }
-  }, [isMuted]);
+  }, [conversation]);
 
   const unmuteSession = useCallback(() => {
-    if (sessionRef.current && isMuted) {
-      try {
-        // Unmute the session audio output
-        sessionRef.current.mute(false);
-        setIsMuted(false);
-      } catch (error) {
-        console.error('Error unmuting session:', error);
-      }
+    if (conversation.status === 'connected') {
+      conversation.micMuted = false
+      setIsMuted(false)
     }
-  }, [isMuted]);
+  }, [conversation]);
 
   const stopSession = useCallback(() => {
-    if (sessionRef.current) {
       // Stop any playing notes and animations
       activeNotesRef.current.forEach((midiNote: number) => {
         pianoControls.stopNote(midiNote);
@@ -342,17 +310,9 @@ export function useAgent(pianoControls: PianoControls): UseAgentReturn {
       if (typeof window !== 'undefined' && window.stopAllPianoAnimations) {
         window.stopAllPianoAnimations();
       }
-      
-      // Disconnect session - based on docs, this should be available
-      try {
-        // The session should handle disconnection automatically when the component unmounts
-        // or we can call session.interrupt() to stop current generation
-        sessionRef.current.close();
-      } catch (error) {
-        console.error('Error interrupting session:', error);
-      }
-      sessionRef.current = null;
-    }
+
+      conversation.endSession()
+
     
     setIsActive(false);
     setIsConnected(false);
@@ -368,6 +328,7 @@ export function useAgent(pianoControls: PianoControls): UseAgentReturn {
     error,
     muteSession,
     unmuteSession,
-    isMuted
+    isMuted,
+    playChordTool
   };
 }
