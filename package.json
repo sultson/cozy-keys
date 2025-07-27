@@ -27,8 +27,11 @@
     "lucide-react": "^0.525.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-router": "^7.7.1",
+    "react-router-dom": "^7.7.1",
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.11",
+    "tonal": "^6.4.2",
     "tone": "^15.1.22",
     "zod": "^3.25.67"
   },

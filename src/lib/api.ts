@@ -240,6 +240,27 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
   }
 }
 
+// Get a single recording by ID
+export async function getRecording(id: string): Promise<RecordingData | null> {
+  try {
+    const { data, error } = await supabase
+      .from('recordings')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching recording:', error);
+      return null;
+    }
+
+    return data as RecordingData;
+  } catch (error) {
+    console.error('Error fetching recording:', error);
+    return null;
+  }
+}
+
 // Get all recordings from Supabase
 export async function getRecordings(): Promise<RecordingData[]> {
   try {
