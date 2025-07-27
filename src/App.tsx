@@ -1,6 +1,6 @@
 
 import './App.css'
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSound } from './hooks/useSound';
 import { useRecording } from './hooks/useRecording';
 import { useAgent } from './hooks/useAgent';
@@ -8,18 +8,21 @@ import { Piano } from './components/Piano';
 import { RecordingsList } from './components/RecordingsList';
 import { PresetSelect } from './components/PresetSelect';
 import { Button } from '@/components/ui/button';
-import { Mic, CheckCircle, AlertCircle, PianoIcon, Settings2, Square, VolumeX, Volume2, Loader2, BookHeart} from 'lucide-react';
+import { Mic, CheckCircle, AlertCircle, PianoIcon, Settings2} from 'lucide-react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { ThemeProvider } from './components/theme-provider';
+import { ThemeProvider, useTheme } from './components/theme-provider';
 import { ModeToggle } from './components/mode-toggle';
 import { Environments, type Environment } from './components/Environments';
 import { CountdownOverlay } from './components/CountdownOverlay';
 import useAuth from './hooks/useAuth';
 import Settings from './Settings';
 import Lessons from './components/Lessons';
+import { Toaster } from 'sonner';
+import Cora from './components/Cora';
 
 
 function App() {
+  const { theme } = useTheme();
   const [midiStatus, setMidiStatus] = useState('Waiting for MIDI...');
   const [midiConnected, setMidiConnected] = useState(false);
   const [isSoundOn, setIsSoundOn] = useState(false);
@@ -58,18 +61,21 @@ function App() {
   const { 
     isRecording, 
     recordings, 
-    cloudRecordings,
     isLoading,
     startRecording, 
     stopRecording, 
     recordEvent, 
-    stopPlayback,
-    uploadToCloud,
-    refreshCloudRecordings,
-    deleteLocalRecording,
-    heartRecording,
-    unheartRecording
+    refreshRecordings
   } = useRecording();
+
+  const stopPlayback = useCallback(() => {
+    // Stop all notes using global functions if available
+    if (typeof window !== 'undefined' && window.stopNote) {
+      for (let n = 21; n <= 108; n++) {
+        window.stopNote(n);
+      }
+    }
+  }, []);
 
   
 
@@ -213,64 +219,7 @@ function App() {
               >
                 <Settings2 className="w-5 h-5" />
               </Button>
-              
-              {/* Learn with Cora Buttons */}
-              {!isCoraActive && !isCoraConnecting && (
-                <Button 
-                  variant="secondary"
-                  onClick={toggleCora}
-                  className="transition-all duration-200
-                    dark:bg-gradient-to-r dark:from-indigo-900 dark:via-slate-800 dark:to-indigo-950 dark:text-indigo-100 dark:border-indigo-600 dark:shadow-lg dark:shadow-indigo-900/30
-                    bg-gradient-to-r from-indigo-100 via-slate-100 to-white text-indigo-900 border border-indigo-300 shadow-lg shadow-indigo-200/40
-                    hover:from-indigo-200 hover:to-indigo-100 hover:text-indigo-800 hover:border-indigo-400
-                    dark:hover:from-indigo-800 dark:hover:to-indigo-900 dark:hover:text-indigo-50 dark:hover:border-indigo-400
-                    focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:outline-none
-                    active:scale-100 active:shadow-md
-                    hover:scale-105 hover:shadow-xl"
-                  title={coraError || 'Learn with Cora'}
-                >
-                  <BookHeart className="w-4 h-4 mr-2 text-indigo-500 group-hover:text-indigo-700 dark:text-indigo-300 dark:group-hover:text-indigo-100 transition-colors duration-200" />
-                  <span className="font-semibold tracking-wide">Learn with Cora</span>
-                </Button>
-              )}
-              
-              {isCoraConnecting && (
-                <Button 
-                  size="default"
-                  variant="secondary"
-                  disabled
-                  className="transition-all duration-200"
-                  title="Connecting to Cora..."
-                >
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Connecting...
-                </Button>
-              )}
-              
-              {isCoraActive && (
-                <div className="flex items-center gap-1">
-                  <Button 
-                    size="icon"
-                    variant="destructive"
-                    onClick={toggleCora}
-                    className="transition-all duration-200"
-                    title="Stop Learning with Cora"
-                  >
-                    <Square className="w-4 h-4" />
-                  </Button>
-                  
-                  <Button 
-                    size="icon"
-                    variant={isCoraSessionMuted ? "outline" : "secondary"}
-                    onClick={toggleCoraMute}
-                    className="transition-all duration-200"
-                    title={isCoraSessionMuted ? "Unmute Cora" : "Mute Cora"}
-                  >
-                    {isCoraSessionMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                  </Button>
-                </div>
-              )}
-              
+              <Cora isCoraActive={isCoraActive} isCoraConnecting={isCoraConnecting} toggleCora={toggleCora} toggleCoraMute={toggleCoraMute} isCoraSessionMuted={isCoraSessionMuted} coraError={coraError || ''} />
               <Button 
                 size="icon"
                 variant={isRecording ? "destructive" : "default"}
@@ -313,27 +262,14 @@ function App() {
         <ErrorBoundary fallback={<div>Could not load recordings</div>}>
         <RecordingsList 
           recordings={recordings}
-          cloudRecordings={cloudRecordings}
-          onStopPlayback={stopPlayback}
           isSoundOn={isSoundOn}
-          onUploadToCloud={uploadToCloud}
-          onDeleteCloudRecording={async (id) => {
-            // Import the delete function and use it
-            const { deleteRecording } = await import('./lib/api');
-            const success = await deleteRecording(id);
-            if (success) {
-              await refreshCloudRecordings();
-            }
-            return success;
-          }}
-          onHeartRecording={heartRecording}
-          onUnheartRecording={unheartRecording}
           userId={userId}
           isLoading={isLoading}
-          onDeleteLocalRecording={deleteLocalRecording}
+          onRefresh={refreshRecordings}
         />
       </ErrorBoundary>
       </div>
+      <Toaster position="top-center" theme={theme} />
     </ThemeProvider>
   )
 }

@@ -3,14 +3,14 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
-import RecordingDetail from './Recording.tsx'
+import Recording from './Recording.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />} />
-        <Route path="/recording/:id" element={<RecordingDetail />} />
+        <Route path="/recording/:id" element={<Recording />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

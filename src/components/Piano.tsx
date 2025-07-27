@@ -1,5 +1,4 @@
 import type { Environment } from '@/hooks/useSound';
-import type { Recording } from '@/hooks/useRecording';
 import  { useEffect, useRef, useCallback } from 'react';
 
 interface PianoProps {
@@ -506,52 +505,64 @@ export function Piano({
     }
   }, []);
 
-  // NEW: Expose synchronized playback functions to parent
+  // Expose synchronized playback functions to parent
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      window.startSynchronizedPlayback = (recording: Recording, audioElement: HTMLAudioElement) => {
+      window.startSynchronizedPlayback = async (recordingId: string, audioElement: HTMLAudioElement) => {
         clearPlaybackVisualization();
         
-        // Create a synchronized playback system
-        const checkEvents = () => {
-          if (!audioElement || audioElement.paused) {
-            clearPlaybackVisualization();
+        try {
+          // Import the function to get recording events
+          const { getRecordingEvents } = await import('../lib/api');
+          const events = await getRecordingEvents(recordingId);
+          
+          if (events.length === 0) {
+            console.warn('No events found for synchronized playback');
             return;
           }
           
-          const currentTimeMs = audioElement.currentTime * 1000; // Convert to milliseconds
-          
-          // Find events that should be triggered at this time
-          recording.events.forEach(event => {
-            const eventTimeMs = event.time;
-            const tolerance = 100; // 100ms tolerance for timing
-            const futureOffset = 150; // 50ms ahead of audio for better visual feedback
-            
-            // Check if we're approaching the event time (with future offset)
-            if (Math.abs(currentTimeMs - (eventTimeMs - futureOffset)) < tolerance) {
-              if (event.type === 'on') {
-                playbackNotesRef.current.add(event.note);
-                animateKey(event.note, true);
-              } else if (event.type === 'off') {
-                playbackNotesRef.current.delete(event.note);
-                animateKey(event.note, false);
-              }
+          // Create a synchronized playback system
+          const checkEvents = () => {
+            if (!audioElement || audioElement.paused) {
+              clearPlaybackVisualization();
+              return;
             }
-          });
+            
+            const currentTimeMs = audioElement.currentTime * 1000; // Convert to milliseconds
+            
+            // Find events that should be triggered at this time
+            events.forEach(event => {
+              const eventTimeMs = event.time;
+              const tolerance = 100; // 100ms tolerance for timing
+              const futureOffset = 150; // 150ms ahead of audio for better visual feedback
+              
+              // Check if we're approaching the event time (with future offset)
+              if (Math.abs(currentTimeMs - (eventTimeMs - futureOffset)) < tolerance) {
+                if (event.type === 'on') {
+                  playbackNotesRef.current.add(event.note);
+                  animateKey(event.note, true);
+                } else if (event.type === 'off') {
+                  playbackNotesRef.current.delete(event.note);
+                  animateKey(event.note, false);
+                }
+              }
+            });
+            
+            // Continue checking
+            requestAnimationFrame(checkEvents);
+          };
           
-          // Continue checking
+          // Start the synchronized playback
           requestAnimationFrame(checkEvents);
-        };
-        
-        // Start the synchronized playback
-        requestAnimationFrame(checkEvents);
+        } catch (error) {
+          console.error('Error starting synchronized playback:', error);
+        }
       };
       
       window.stopPlaybackWithVisualization = () => {
         clearPlaybackVisualization();
       };
 
-      // NEW: Expose functions for voice agent visual feedback
       window.animatePianoKey = (note: number, isPressed: boolean) => {
         if (isPressed) {
           activeNotesRef.current.add(note);
@@ -773,7 +784,7 @@ declare global {
     playNote?: (note: number, velocity: number) => void;
     stopNote?: (note: number) => void;
     Tone?: typeof import('tone');
-    startSynchronizedPlayback?: (recording: Recording, audioElement: HTMLAudioElement) => void;
+    startSynchronizedPlayback?: (recordingId: string, audioElement: HTMLAudioElement) => void;
     stopPlaybackWithVisualization?: () => void;
     animatePianoKey?: (note: number, isPressed: boolean) => void;
     stopAllPianoAnimations?: () => void;

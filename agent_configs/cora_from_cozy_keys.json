@@ -1,0 +1,251 @@
+{
+    "agentId": "agent_5001k139b761fpns2cy95f0bsd71",
+    "name": "cora",
+    "conversationConfig": {
+        "asr": {
+            "quality": "high",
+            "provider": "elevenlabs",
+            "userInputAudioFormat": "pcm_16000",
+            "keywords": []
+        },
+        "turn": {
+            "turnTimeout": 7,
+            "silenceEndCallTimeout": 20,
+            "mode": "turn"
+        },
+        "tts": {
+            "modelId": "eleven_flash_v2",
+            "voiceId": "pFZP5JQG7iQjIQuC4Bku",
+            "supportedVoices": [],
+            "agentOutputAudioFormat": "pcm_16000",
+            "optimizeStreamingLatency": 3,
+            "stability": 0.5,
+            "speed": 1,
+            "similarityBoost": 0.8,
+            "pronunciationDictionaryLocators": []
+        },
+        "conversation": {
+            "textOnly": false,
+            "maxDurationSeconds": 300,
+            "clientEvents": [
+                "audio",
+                "interruption",
+                "user_transcript",
+                "agent_response",
+                "agent_response_correction"
+            ]
+        },
+        "languagePresets": {},
+        "agent": {
+            "firstMessage": "",
+            "language": "en",
+            "dynamicVariables": {
+                "dynamicVariablePlaceholders": {}
+            },
+            "prompt": {
+                "prompt": "You are Cora, a practical and knowledgeable, and perhaps slightly grumpy piano teacher and music theory expert living within the Cozy Keys app. You help users learn piano by:\n\n          1. Teaching music theory concepts in an accessible way\n          2. Demonstrating chords, scales, and musical examples by playing them on the piano\n          3. Responding to requests about specific musical genres like jazz, classical, pop, etc.\n          4. Playing musical examples to illustrate your teachings\n\n          You have access to piano tools that let you:\n          - Play individual notes with specified velocity and duration\n          - Play chords (multiple notes together)\n          - Play sequences of notes/chords with custom timing\n          - Stop all playing notes\n\n          When teaching:\n          - Always demonstrate what you're explaining by playing it on the piano\n          - Use musical examples that are appropriate for the user's level\n          - Keep demonstrations musical (e.g 4 chords or a short phrase)\n\n          When showing an asked example:\n          - Make it musically impressive by making full use of piano range - e.g lower octaves for bass etc.\n\n          When asked to play chords popular with penguins, play some lush chords with lower octaves for bass.\n\n          When they ask about music, always include a piano demonstration!",
+                "llm": "claude-sonnet-4",
+                "temperature": 0,
+                "maxTokens": -1,
+                "toolIds": [
+                    "tool_8901k13b18psfvp8bez7h0t0d70m"
+                ],
+                "built_in_tools": {
+                    "end_call": null,
+                    "language_detection": null,
+                    "transfer_to_agent": null,
+                    "transfer_to_number": null,
+                    "skip_turn": null,
+                    "play_keypad_touch_tone": null,
+                    "voicemail_detection": null
+                },
+                "mcpServerIds": [],
+                "nativeMcpServerIds": [],
+                "knowledgeBase": [],
+                "ignoreDefaultPersonality": false,
+                "rag": {
+                    "enabled": false,
+                    "embeddingModel": "e5_mistral_7b_instruct",
+                    "maxVectorDistance": 0.6,
+                    "maxDocumentsLength": 50000,
+                    "maxRetrievedRagChunksCount": 20
+                },
+                "timezone": null,
+                "tools": [
+                    {
+                        "type": "client",
+                        "name": "playChordsTool",
+                        "description": "Play chords for the user.",
+                        "responseTimeoutSecs": 7,
+                        "assignments": [],
+                        "parameters": {
+                            "type": "object",
+                            "required": [
+                                "chords"
+                            ],
+                            "description": "",
+                            "properties": {
+                                "duration": {
+                                    "type": "number",
+                                    "description": "Duration in seconds - e.g 0.5 for short chords 2 for longer",
+                                    "dynamicVariable": "",
+                                    "constantValue": ""
+                                },
+                                "chords": {
+                                    "type": "array",
+                                    "description": "List of chord names to play, written as standard chord symbols (e.g. \"Cmaj7\", \"F#m7\", \"G7\").Only include valid chord symbols.",
+                                    "items": {
+                                        "type": "string",
+                                        "description": " ",
+                                        "dynamic_variable": "",
+                                        "constant_value": ""
+                                    }
+                                }
+                            }
+                        },
+                        "expectsResponse": true,
+                        "dynamicVariables": {
+                            "dynamicVariablePlaceholders": {}
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "metadata": {
+        "createdAtUnixSecs": 1753530867
+    },
+    "platformSettings": {
+        "auth": {
+            "enableAuth": true,
+            "allowlist": []
+        },
+        "evaluation": {
+            "criteria": []
+        },
+        "widget": {
+            "variant": "full",
+            "placement": "bottom-right",
+            "expandable": "never",
+            "avatar": {
+                "type": "orb",
+                "color1": "#2792DC",
+                "color2": "#9CE6E6"
+            },
+            "feedbackMode": "during",
+            "bgColor": "#ffffff",
+            "textColor": "#000000",
+            "btnColor": "#000000",
+            "btnTextColor": "#ffffff",
+            "borderColor": "#e1e1e1",
+            "focusColor": "#000000",
+            "shareablePageShowTerms": true,
+            "termsText": "#### Terms and conditions\n\nBy clicking \"Agree,\" and each time I interact with this AI agent, I consent to the recording, storage, and sharing of my communications with third-party service providers, and as described in the Privacy Policy.\nIf you do not wish to have your conversations recorded, please refrain from using this service.",
+            "termsHtml": "<h4>Terms and conditions</h4>\n<p>By clicking &quot;Agree,&quot; and each time I interact with this AI agent, I consent to the recording, storage, and sharing of my communications with third-party service providers, and as described in the Privacy Policy.\nIf you do not wish to have your conversations recorded, please refrain from using this service.</p>\n",
+            "showAvatarWhenCollapsed": true,
+            "disableBanner": false,
+            "micMutingEnabled": false,
+            "transcriptEnabled": false,
+            "textInputEnabled": true,
+            "textContents": {
+                "start_chat": null,
+                "chatting_status": null,
+                "input_placeholder_text_only": null,
+                "input_placeholder_new_conversation": null
+            },
+            "styles": {
+                "base": null,
+                "base_hover": null,
+                "base_active": null,
+                "base_border": null,
+                "base_subtle": null,
+                "base_primary": null,
+                "base_error": null,
+                "accent": null,
+                "accent_hover": null,
+                "accent_active": null,
+                "accent_border": null,
+                "accent_subtle": null,
+                "accent_primary": null,
+                "overlay_padding": null,
+                "button_radius": null,
+                "input_radius": null,
+                "bubble_radius": null,
+                "sheet_radius": null,
+                "compact_sheet_radius": null,
+                "dropdown_sheet_radius": null
+            },
+            "languageSelector": false,
+            "supportsTextOnly": true,
+            "languagePresets": {}
+        },
+        "dataCollection": {},
+        "overrides": {
+            "conversationConfigOverride": {
+                "tts": {
+                    "voiceId": false
+                },
+                "conversation": {
+                    "textOnly": true
+                },
+                "agent": {
+                    "firstMessage": false,
+                    "language": false,
+                    "prompt": {
+                        "prompt": false
+                    }
+                }
+            },
+            "customLlmExtraBody": false,
+            "enableConversationInitiationClientDataFromWebhook": false
+        },
+        "callLimits": {
+            "agentConcurrencyLimit": -1,
+            "dailyLimit": 100000,
+            "bursting_enabled": true
+        },
+        "ban": null,
+        "privacy": {
+            "recordVoice": true,
+            "retentionDays": 730,
+            "deleteTranscriptAndPii": true,
+            "deleteAudio": true,
+            "applyToExistingConversations": false,
+            "zeroRetentionMode": false
+        },
+        "workspaceOverrides": {
+            "webhooks": {
+                "send_audio": false
+            }
+        },
+        "testing": {
+            "test_ids": []
+        },
+        "safety": {
+            "isBlockedIvc": false,
+            "isBlockedNonIvc": false,
+            "ignoreSafetyEvaluation": false
+        }
+    },
+    "phoneNumbers": [],
+    "workflow": {
+        "enabled": false,
+        "edges": {},
+        "nodes": {
+            "start_node": {
+                "type": "start",
+                "position": {
+                    "x": 0,
+                    "y": 0
+                }
+            }
+        }
+    },
+    "accessInfo": {
+        "isCreator": true,
+        "creatorName": "Rohekael Part",
+        "creatorEmail": "rohekaelpart@gmail.com",
+        "role": "admin"
+    },
+    "tags": []
+}

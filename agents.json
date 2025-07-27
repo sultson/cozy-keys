@@ -1,0 +1,8 @@
+{
+    "agents": [
+        {
+            "name": "Cora from Cozy Keys",
+            "config": "agent_configs/cora_from_cozy_keys.json"
+        }
+    ]
+}

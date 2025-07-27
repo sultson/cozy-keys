@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import * as Tone from 'tone';
-import { getRecordings, uploadRecording, getUserCountry,heartRecording as heartRecordingApi, unheartRecording as unheartRecordingApi, type RecordingData } from '../lib/api';
+import { getRecordings, uploadRecording, getUserCountry, type RecordingData } from '../lib/api';
+import { toast } from 'sonner';
 
 export interface RecordingEvent {
   type: 'on' | 'off';
@@ -20,23 +21,12 @@ export interface Recording {
 
 interface UseRecordingReturn {
   isRecording: boolean;
-  recordings: Recording[];
-  cloudRecordings: RecordingData[];
+  recordings: RecordingData[];
   isLoading: boolean;
   startRecording: () => void;
   stopRecording: () => void;
   recordEvent: (type: 'on' | 'off', note: number, velocity: number) => void;
-  clearRecordings: () => void;
-  playRecording: (recording: Recording, options?: {
-    onEvent?: (event: RecordingEvent) => void;
-    onDone?: () => void;
-  }) => void;
-  stopPlayback: () => void;
-  uploadToCloud: (title: string, recording?: Recording) => Promise<boolean>;
-  refreshCloudRecordings: () => Promise<void>;
-  deleteLocalRecording: (recording: Recording) => void;
-  heartRecording: (id: number) => Promise<boolean>;
-  unheartRecording: (id: number) => Promise<boolean>;
+  refreshRecordings: () => Promise<void>;
 }
 
 
@@ -90,13 +80,10 @@ function encodeMidi(events: RecordingEvent[]): Uint8Array {
 
 export function useRecording(): UseRecordingReturn {
   const [isRecording, setIsRecording] = useState(false);
-  const [recordings, setRecordings] = useState<Recording[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [cloudRecordings, setCloudRecordings] = useState<RecordingData[]>([]);
+  const [recordings, setRecordings] = useState<RecordingData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const currentRecordingRef = useRef<Recording | null>(null);
-  const playbackTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
-  const isRecordingRef = useRef<boolean>(false); // Track recording state with ref for immediate access
+  const isRecordingRef = useRef<boolean>(false);
 
   // Audio recording state
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -105,79 +92,9 @@ export function useRecording(): UseRecordingReturn {
   const audioUrlRef = useRef<string | null>(null);
   const midiUrlRef = useRef<string | null>(null);
   const wavUrlRef = useRef<string | null>(null);
-  const toneConnectedRef = useRef<boolean>(false); // NEW: track if Tone.Destination is connected
+  const toneConnectedRef = useRef<boolean>(false);
 
   const now = useCallback(() => performance.now(), []);
-
-  // Save recordings to localStorage
-  const saveRecordingsToStorage = useCallback(async (newRecordings: Recording[]) => {
-    try {
-      // Convert blob URLs to base64 for localStorage storage
-      const recordingsForStorage = await Promise.all(
-        newRecordings.map(async (recording) => {
-          const storageRecording = { ...recording };
-          
-          // Convert audio blob to base64
-          if (recording.audioUrl && recording.audioUrl.startsWith('blob:')) {
-            try {
-              const response = await fetch(recording.audioUrl);
-              const blob = await response.blob();
-              const base64 = await blobToBase64(blob);
-              storageRecording.audioUrl = base64;
-            } catch (error) {
-              console.error('Error converting audio to base64:', error);
-              storageRecording.audioUrl = null;
-            }
-          }
-          
-          // Convert MIDI blob to base64
-          if (recording.midiUrl && recording.midiUrl.startsWith('blob:')) {
-            try {
-              const response = await fetch(recording.midiUrl);
-              const blob = await response.blob();
-              const base64 = await blobToBase64(blob);
-              storageRecording.midiUrl = base64;
-            } catch (error) {
-              console.error('Error converting MIDI to base64:', error);
-              storageRecording.midiUrl = null;
-            }
-          }
-          
-          // Convert WAV blob to base64
-          if (recording.mp3Url && recording.mp3Url.startsWith('blob:')) {
-            try {
-              const response = await fetch(recording.mp3Url);
-              const blob = await response.blob();
-              const base64 = await blobToBase64(blob);
-              storageRecording.mp3Url = base64;
-            } catch (error) {
-              console.error('Error converting WAV to base64:', error);
-              storageRecording.mp3Url = null;
-            }
-          }
-          
-          return storageRecording;
-        })
-      );
-      
-      localStorage.setItem('cozy-keys-recordings', JSON.stringify(recordingsForStorage));
-    } catch (error) {
-      console.error('Error saving recordings to localStorage:', error);
-    }
-  }, []);
-
-  // Helper function to convert blob to base64
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  };
 
   // Convert WebM to WAV using Web Audio API
   const convertToWav = useCallback(async (webmBlob: Blob): Promise<string | null> => {
@@ -195,7 +112,6 @@ export function useRecording(): UseRecordingReturn {
       const maxDuration = 300; // 5 minutes max
       if (audioBuffer.duration > maxDuration) {
         console.warn(`Recording too long (${audioBuffer.duration}s), limiting to ${maxDuration}s`);
-        // We could truncate here, but for now let's just return null
         return null;
       }
       
@@ -215,7 +131,7 @@ export function useRecording(): UseRecordingReturn {
       // Render the audio with timeout
       const renderPromise = offlineContext.startRendering();
       const timeoutPromise = new Promise<AudioBuffer>((_, reject) => {
-        setTimeout(() => reject(new Error('WAV conversion timeout')), 30000); // 30 second timeout
+        setTimeout(() => reject(new Error('WAV conversion timeout')), 30000);
       });
       
       const renderedBuffer = await Promise.race([renderPromise, timeoutPromise]);
@@ -304,7 +220,8 @@ export function useRecording(): UseRecordingReturn {
     if (isRecording) return;
     console.log('Starting recording...');
     setIsRecording(true);
-    isRecordingRef.current = true; // Set ref immediately
+    isRecordingRef.current = true;
+    
     // Start MIDI event recording
     currentRecordingRef.current = {
       startedAt: now(),
@@ -314,6 +231,7 @@ export function useRecording(): UseRecordingReturn {
       midiUrl: null,
     };
     console.log('Recording started, currentRecordingRef set:', currentRecordingRef.current);
+    
     // Start audio recording
     const dest = ensureDestination();
     if (dest) {
@@ -365,42 +283,61 @@ export function useRecording(): UseRecordingReturn {
     }
   }, [isRecording, now, ensureDestination, convertToWav]);
 
-  const stopRecording = useCallback(() => {
+  const stopRecording = useCallback(async () => {
     if (!isRecording) return;
     console.log('Stopping recording...');
     setIsRecording(false);
-    isRecordingRef.current = false; // Set ref immediately
+    isRecordingRef.current = false;
     
     // Stop audio recording first
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
     
-    // Wait for audio recording to finish, then add to recordings
-    const checkAudioAndAdd = () => {
+    // Wait for audio recording to finish, then upload to cloud
+    const uploadToCloud = async () => {
+
       if (currentRecordingRef.current) {
-        // Generate MIDI file
-        const midiBytes = encodeMidi(currentRecordingRef.current.events);
-        const midiBlob = new Blob([midiBytes], { type: 'audio/midi' });
-        const midiUrl = URL.createObjectURL(midiBlob);
-        
-        // Ensure we have valid data before adding to recordings
-        const recording = {
-          ...currentRecordingRef.current,
-          startedAt: currentRecordingRef.current.startedAt || now(),
-          timestamp: currentRecordingRef.current.timestamp || new Date(),
-          events: currentRecordingRef.current.events || [],
-          audioUrl: audioUrlRef.current || null,
-          midiUrl: midiUrl,
-          mp3Url: wavUrlRef.current || null,
-        };
-        setRecordings(prev => {
-          const newRecordings = [recording, ...prev]; // newest first
-          saveRecordingsToStorage(newRecordings).catch(error => {
-            console.error('Error saving recordings to storage:', error);
+        setIsLoading(true);
+        const toastId = toast('Saving...');
+        try {
+          // Generate MIDI file
+          const midiBytes = encodeMidi(currentRecordingRef.current.events);
+          const midiBlob = new Blob([midiBytes], { type: 'audio/midi' });
+          const midiUrl = URL.createObjectURL(midiBlob);
+          
+          // Create temporary recording object for upload
+          const tempRecording = {
+            ...currentRecordingRef.current,
+            startedAt: currentRecordingRef.current.startedAt || now(),
+            timestamp: currentRecordingRef.current.timestamp || new Date(),
+            events: currentRecordingRef.current.events || [],
+            audioUrl: audioUrlRef.current || null,
+            midiUrl: midiUrl,
+            mp3Url: wavUrlRef.current || null,
+          };
+          
+          const country = await getUserCountry();
+          
+          const result = await uploadRecording({
+            recording: tempRecording,
+            country,
+            isPublic: false // Start as private
           });
-          return newRecordings;
-        });
+          
+          if (result) {
+            console.log('Recording uploaded successfully');
+            toast.success('Saved', { id: toastId });
+            await refreshRecordings();
+          } else {
+            console.error('Failed to upload recording');
+            toast.error('Failed to save', { id: toastId });
+          }
+        } catch (error) {
+          console.error('Error uploading recording:', error);
+        } finally {
+          setIsLoading(false);
+        }
       }
       currentRecordingRef.current = null;
       audioUrlRef.current = null;
@@ -408,8 +345,8 @@ export function useRecording(): UseRecordingReturn {
       wavUrlRef.current = null;
     };
     
-    // Give audio recording a moment to finish, then add to recordings
-    setTimeout(checkAudioAndAdd, 100);
+    // Give audio recording a moment to finish, then upload
+    setTimeout(uploadToCloud, 100);
   }, [isRecording, now]);
 
   const recordEvent = useCallback((type: 'on' | 'off', note: number, velocity: number) => {
@@ -440,234 +377,31 @@ export function useRecording(): UseRecordingReturn {
     console.log(`Recorded ${type} event for note ${note} at time ${now() - currentRecordingRef.current.startedAt}ms`);
   }, [now]);
 
-  const clearRecordings = useCallback(() => {
-    setRecordings([]);
-    saveRecordingsToStorage([]).catch(error => {
-      console.error('Error saving recordings to storage:', error);
-    });
-  }, [saveRecordingsToStorage]);
-
-  const stopPlayback = useCallback(() => {
-    playbackTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
-    playbackTimeoutsRef.current = [];
-    // Stop all notes using global functions if available
-    if (typeof window !== 'undefined' && window.stopNote) {
-      for (let n = 21; n <= 108; n++) {
-        window.stopNote(n);
-      }
-    }
-  }, []);
-
-  const playRecording = useCallback((recording: Recording, options: {
-    onEvent?: (event: RecordingEvent) => void;
-    onDone?: () => void;
-  } = {}) => {
-    // MIDI playback is now optional; playback is audio only in UI
-    // This function is kept for compatibility
-    if (!recording || !recording.events || recording.events.length === 0) return;
-    stopPlayback();
-    recording.events.forEach(event => {
-      const timeout = setTimeout(() => {
-        if (options.onEvent) options.onEvent(event);
-        if (typeof window !== 'undefined') {
-          if (event.type === 'on' && window.playNote) {
-            window.playNote(event.note, event.velocity);
-          } else if (event.type === 'off' && window.stopNote) {
-            window.stopNote(event.note);
-          }
-        }
-      }, event.time);
-      playbackTimeoutsRef.current.push(timeout);
-    });
-    // Call onDone after last event
-    if (recording.events.length > 0) {
-      const lastTime = recording.events[recording.events.length - 1].time;
-      const doneTimeout = setTimeout(() => {
-        if (options.onDone) options.onDone();
-      }, lastTime + 100);
-      playbackTimeoutsRef.current.push(doneTimeout);
-    }
-  }, [stopPlayback]);
-
-  // Load recordings from localStorage on mount
-  useEffect(() => {
-    const loadRecordingsFromStorage = async () => {
-      try {
-        const saved = localStorage.getItem('cozy-keys-recordings');
-        if (saved) {
-          const parsedRecordings = JSON.parse(saved);
-          
-          // Convert base64 data back to blob URLs
-          const recordingsWithBlobs = await Promise.all(
-            parsedRecordings.map(async (recording: Recording & { audioUrl?: string | null; midiUrl?: string | null; mp3Url?: string | null }) => {
-              const restoredRecording = { ...recording };
-              
-              // Convert base64 audio back to blob URL
-              if (recording.audioUrl && recording.audioUrl.startsWith('data:')) {
-                try {
-                  const response = await fetch(recording.audioUrl);
-                  const blob = await response.blob();
-                  restoredRecording.audioUrl = URL.createObjectURL(blob);
-                } catch (error) {
-                  console.error('Error converting base64 audio to blob:', error);
-                  restoredRecording.audioUrl = null;
-                }
-              }
-              
-              // Convert base64 MIDI back to blob URL
-              if (recording.midiUrl && recording.midiUrl.startsWith('data:')) {
-                try {
-                  const response = await fetch(recording.midiUrl);
-                  const blob = await response.blob();
-                  restoredRecording.midiUrl = URL.createObjectURL(blob);
-                } catch (error) {
-                  console.error('Error converting base64 MIDI to blob:', error);
-                  restoredRecording.midiUrl = null;
-                }
-              }
-              
-              // Convert base64 MP3 back to blob URL
-              if (recording.mp3Url && recording.mp3Url.startsWith('data:')) {
-                try {
-                  const response = await fetch(recording.mp3Url);
-                  const blob = await response.blob();
-                  restoredRecording.mp3Url = URL.createObjectURL(blob);
-                } catch (error) {
-                  console.error('Error converting base64 MP3 to blob:', error);
-                  restoredRecording.mp3Url = null;
-                }
-              }
-              
-              return restoredRecording;
-            })
-          );
-          
-          setRecordings(recordingsWithBlobs);
-        }
-      } catch (error) {
-        console.error('Error loading recordings from localStorage:', error);
-      } finally {
-        setIsInitialized(true);
-      }
-    };
-    
-    loadRecordingsFromStorage();
-  }, []);
-
-  // Load cloud recordings on mount
-  useEffect(() => {
-    if (isInitialized) {
-      refreshCloudRecordings();
-    }
-  }, [isInitialized]);
-
-  const uploadToCloud = useCallback(async (title: string, recording?: Recording): Promise<boolean> => {
-    const recordingToUpload = recording || (recordings.length > 0 ? recordings[0] : null);
-    if (!recordingToUpload) return false;
-    
-    setIsLoading(true);
-    try {
-      console.log('Starting cloud upload for recording:', recordingToUpload);
-      
-      const country = await getUserCountry();
-      
-      const result = await uploadRecording({
-        recording: recordingToUpload,
-        title,
-        country,
-        isPublic: true // Make it public immediately
-      });
-      
-      if (result) {
-        console.log('Upload successful, removing local recording');
-        // Remove the local recording after successful upload
-        setRecordings(prev => {
-          const newRecordings = prev.filter(r => r !== recordingToUpload);
-          saveRecordingsToStorage(newRecordings).catch(error => {
-            console.error('Error saving recordings to storage:', error);
-          });
-          return newRecordings;
-        });
-        await refreshCloudRecordings();
-        return true;
-      } else {
-        console.error('Upload failed - no result returned');
-        return false;
-      }
-    } catch (error) {
-      console.error('Error uploading to cloud:', error);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [recordings, saveRecordingsToStorage]);
-
- 
-
-  const refreshCloudRecordings = useCallback(async (): Promise<void> => {
+  const refreshRecordings = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     try {
       const cloudRecs = await getRecordings();
-      setCloudRecordings(cloudRecs);
+      setRecordings(cloudRecs);
     } catch (error) {
-      console.error('Error refreshing cloud recordings:', error);
+      console.error('Error refreshing recordings:', error);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const deleteLocalRecording = useCallback((recording: Recording) => {
-    setRecordings(prev => {
-      const newRecordings = prev.filter(r => r !== recording);
-      saveRecordingsToStorage(newRecordings).catch(error => {
-        console.error('Error saving recordings to storage:', error);
-      });
-      return newRecordings;
-    });
-  }, [saveRecordingsToStorage]);
-
-  const heartRecording = useCallback(async (id: number): Promise<boolean> => {
-    try {
-      const success = await heartRecordingApi(id);
-      if (success) {
-        await refreshCloudRecordings();
-      }
-      return success;
-    } catch (error) {
-      console.error('Error hearting recording:', error);
-      return false;
-    }
-  }, [refreshCloudRecordings]);
-
-  const unheartRecording = useCallback(async (id: number): Promise<boolean> => {
-    try {
-      const success = await unheartRecordingApi(id);
-      if (success) {
-        await refreshCloudRecordings();
-      }
-      return success;
-    } catch (error) {
-      console.error('Error unhearting recording:', error);
-      return false;
-    }
-  }, [refreshCloudRecordings]);
+  // Load recordings from cloud on mount
+  useEffect(() => {
+    refreshRecordings();
+  }, [refreshRecordings]);
 
   return {
     isRecording,
     recordings,
-    cloudRecordings,
     isLoading,
     startRecording,
     stopRecording,
     recordEvent,
-    clearRecordings,
-    playRecording,
-    stopPlayback,
-    uploadToCloud,
-    refreshCloudRecordings,
-    deleteLocalRecording,
-    heartRecording,
-    unheartRecording,
+    refreshRecordings,
   };
 }
 

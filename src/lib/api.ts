@@ -1,8 +1,8 @@
 import supabase from './supabase';
-import type { Recording } from '../hooks/useRecording';
+import type { Recording, RecordingEvent } from '../hooks/useRecording';
 
 export interface RecordingData {
-  id?: number;
+  id?: string; // UUID
   created_at?: string;
   audio?: string;
   midi?: string;
@@ -13,12 +13,11 @@ export interface RecordingData {
   created_by?: string;
   is_public?: boolean;
   hearts?: string[]; // Array of author IDs who hearted this recording
-  type: 'recording';
 }
 
 export interface UploadRecordingParams {
   recording: Recording;
-  title: string;
+  title?: string; // Make title optional for immediate uploads
   country: string;
   isPublic?: boolean;
 }
@@ -50,7 +49,11 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
   try {
     const user = await getUser()
     const recordingId = crypto.randomUUID()
-    console.log('Upload recording called with:', { title, country, userId: user?.id, isPublic });
+    
+    // Use a default title if none provided (for immediate uploads)
+    const finalTitle = title || `Recording ${new Date().toLocaleString()}`;
+    
+    console.log('Upload recording called with:', { title: finalTitle, country, userId: user?.id, isPublic });
     console.log('Recording has audioUrl:', !!recording.audioUrl, 'mp3Url:', !!recording.mp3Url, 'midiUrl:', !!recording.midiUrl);
     
     // Check if we have any audio data
@@ -79,11 +82,12 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
           throw new Error('File too large');
         }
         
-        audioFileName = `recordings/audio_${recordingId}.wav`;
+        audioFileName = `audio_${recordingId}.wav`;
+        const audioPath = `recordings/${user?.id}/${audioFileName}`;
         
         const { error: audioError } = await supabase.storage
           .from('user-data')
-          .upload(audioFileName, audioBlob, {
+          .upload(audioPath, audioBlob, {
             contentType: 'audio/wav',
             cacheControl: '3600'
           });
@@ -94,7 +98,7 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
         } else {
           const { data: audioUrlData } = supabase.storage
             .from('user-data')
-            .getPublicUrl(audioFileName);
+            .getPublicUrl(audioPath);
           audioUrl = audioUrlData.publicUrl;
           console.log('WAV upload successful');
         }
@@ -118,11 +122,12 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
                              originalBlob.type.includes('mp4') ? 'mp4' : 
                              originalBlob.type.includes('ogg') ? 'ogg' : 'wav';
             
-            audioFileName = `recordings/audio_${recordingId}.${extension}`;
+            audioFileName = `audio_${recordingId}.${extension}`;
+            const audioPath = `recordings/${user?.id}/${audioFileName}`;
             
             const { error: originalError } = await supabase.storage
               .from('user-data')
-              .upload(audioFileName, originalBlob, {
+              .upload(audioPath, originalBlob, {
                 contentType: originalBlob.type,
                 cacheControl: '3600'
               });
@@ -132,7 +137,7 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
             } else {
               const { data: audioUrlData } = supabase.storage
                 .from('user-data')
-                .getPublicUrl(audioFileName);
+                .getPublicUrl(audioPath);
               audioUrl = audioUrlData.publicUrl;
               console.log('Original format upload successful');
             }
@@ -157,11 +162,11 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
                            originalBlob.type.includes('mp4') ? 'mp4' : 
                            originalBlob.type.includes('ogg') ? 'ogg' : 'wav';
           
-          audioFileName = `recordings/audio_${recordingId}.${extension}`;
-          
+          audioFileName = `audio_${recordingId}.${extension}`;
+          const audioPath = `recordings/${user?.id}/${audioFileName}`;
           const { error: originalError } = await supabase.storage
             .from('user-data')
-            .upload(audioFileName, originalBlob, {
+            .upload(audioPath, originalBlob, {
               contentType: originalBlob.type,
               cacheControl: '3600'
             });
@@ -171,7 +176,7 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
           } else {
             const { data: audioUrlData } = supabase.storage
               .from('user-data')
-              .getPublicUrl(audioFileName);
+              .getPublicUrl(audioPath);
             audioUrl = audioUrlData.publicUrl;
             console.log('Original format upload successful');
           }
@@ -186,11 +191,12 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
     if (recording.midiUrl) {
       const midiResponse = await fetch(recording.midiUrl);
       const midiBlob = await midiResponse.blob();
-      const midiFileName = `recordings/midi_${recordingId}.mid`;
+      const midiFileName = `midi_${recordingId}.mid`;
+      const midiPath = `recordings/${user?.id}/${midiFileName}`;
       
       const { error: midiError } = await supabase.storage
         .from('user-data')
-        .upload(midiFileName, midiBlob, {
+        .upload(midiPath, midiBlob, {
           contentType: 'audio/midi',
           cacheControl: '3600'
         });
@@ -200,7 +206,7 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
       } else {
         const { data: midiUrlData } = supabase.storage
           .from('user-data')
-          .getPublicUrl(midiFileName);
+          .getPublicUrl(midiPath);
         midiUrl = midiUrlData.publicUrl;
       }
     }
@@ -219,11 +225,12 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
         created_by: user?.id,
         audio: audioUrl,
         midi: midiUrl,
-        title,
+        title: finalTitle,
         country,
         duration,
         events_count: eventsCount,
-        is_public: isPublic
+        is_public: isPublic,
+        hearts: [] // Initialize empty hearts array
       })
       .select()
       .single();
@@ -283,7 +290,7 @@ export async function getRecordings(): Promise<RecordingData[]> {
 
 
 // Delete a recording
-export async function deleteRecording(id: number): Promise<boolean> {
+export async function deleteRecording(id: string): Promise<boolean> {
   try {
     // First get the recording to find the file URLs
     const { data: recording, error: fetchError } = await supabase
@@ -335,7 +342,7 @@ export async function deleteRecording(id: number): Promise<boolean> {
 }
 
 // Heart a recording (add author ID to hearts array)
-export async function heartRecording(id: number): Promise<boolean> {
+export async function heartRecording(id: string): Promise<boolean> {
   try {
     const user = await getUser()
     // First get the recording to get current hearts
@@ -378,7 +385,7 @@ export async function heartRecording(id: number): Promise<boolean> {
 }
 
 // Unheart a recording (remove author ID from hearts array)
-export async function unheartRecording(id: number): Promise<boolean> {
+export async function unheartRecording(id: string): Promise<boolean> {
   try {
     const user = await getUser()
     // First get the recording to get current hearts
@@ -418,4 +425,206 @@ export async function unheartRecording(id: number): Promise<boolean> {
     console.error('Error unhearting recording:', error);
     return false;
   }
+} 
+
+// Toggle the is_public property of a recording
+export async function toggleRecordingPublic(id: string): Promise<boolean> {
+  try {
+    const user = await getUser()
+    
+    // First get the recording to get current public status
+    const { data: recording, error: fetchError } = await supabase
+      .from('recordings')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching recording for public toggle:', fetchError);
+      return false;
+    }
+
+    // Only allow the creator to toggle public status
+    if (recording.created_by !== user?.id) {
+      console.error('User not authorized to toggle public status');
+      return false;
+    }
+
+    // Toggle the public status
+    const newPublicStatus = !recording.is_public;
+    
+    const { error } = await supabase
+      .from('recordings')
+      .update({
+        is_public: newPublicStatus
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error toggling recording public status:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error toggling recording public status:', error);
+    return false;
+  }
+} 
+
+// Update recording title
+export async function updateRecordingTitle(id: string, newTitle: string): Promise<boolean> {
+  try {
+    const user = await getUser()
+    
+    // First get the recording to check ownership
+    const { data: recording, error: fetchError } = await supabase
+      .from('recordings')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching recording for title update:', fetchError);
+      return false;
+    }
+
+    // Only allow the creator to update the title
+    if (recording.created_by !== user?.id) {
+      console.error('User not authorized to update recording title');
+      return false;
+    }
+
+    // Update the title
+    const { error } = await supabase
+      .from('recordings')
+      .update({
+        title: newTitle
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error updating recording title:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error updating recording title:', error);
+    return false;
+  }
+}
+
+// Get MIDI events from a recording for synchronized playback
+export async function getRecordingEvents(recordingId: string): Promise<RecordingEvent[]> {
+  try {
+    // First get the recording to find the MIDI URL
+    const { data: recording, error: fetchError } = await supabase
+      .from('recordings')
+      .select('*')
+      .eq('id', recordingId)
+      .single();
+
+    if (fetchError || !recording.midi) {
+      console.error('Error fetching recording or no MIDI data:', fetchError);
+      return [];
+    }
+
+    // Fetch the MIDI file
+    const response = await fetch(recording.midi);
+    const midiBlob = await response.blob();
+    const arrayBuffer = await midiBlob.arrayBuffer();
+    
+    // Decode MIDI data to get events
+    const events = decodeMidiToEvents(arrayBuffer);
+    return events;
+  } catch (error) {
+    console.error('Error getting recording events:', error);
+    return [];
+  }
+}
+
+// Simple MIDI decoder to extract note events
+function decodeMidiToEvents(arrayBuffer: ArrayBuffer): RecordingEvent[] {
+  const events: RecordingEvent[] = [];
+  const dataView = new DataView(arrayBuffer);
+  let offset = 0;
+  
+  // Skip MIDI header
+  if (dataView.getUint32(0) === 0x4D546864) { // 'MThd'
+    offset = 14; // Skip header
+  }
+  
+  // Find first track
+  while (offset < arrayBuffer.byteLength) {
+    if (dataView.getUint32(offset) === 0x4D54726B) { // 'MTrk'
+      const trackLength = dataView.getUint32(offset + 4);
+      offset += 8;
+      const trackEnd = offset + trackLength;
+      
+      let absoluteTime = 0;
+      while (offset < trackEnd) {
+        // Read delta time
+        let deltaTime = 0;
+        let byte;
+        do {
+          byte = dataView.getUint8(offset++);
+          deltaTime = (deltaTime << 7) | (byte & 0x7F);
+        } while (byte & 0x80);
+        
+        absoluteTime += deltaTime;
+        
+        // Read event type
+        const eventType = dataView.getUint8(offset++);
+        
+        if (eventType === 0xFF) {
+          // Meta event, skip
+          dataView.getUint8(offset++); // metaType
+          let metaLength = 0;
+          do {
+            byte = dataView.getUint8(offset++);
+            metaLength = (metaLength << 7) | (byte & 0x7F);
+          } while (byte & 0x80);
+          offset += metaLength;
+        } else if ((eventType & 0xF0) === 0x90) {
+          // Note on
+          const note = dataView.getUint8(offset++);
+          const velocity = dataView.getUint8(offset++);
+          if (velocity > 0) {
+            events.push({
+              type: 'on',
+              note,
+              velocity: velocity / 127,
+              time: absoluteTime * 2 // Convert ticks to milliseconds (assuming 480 ticks/quarter)
+            });
+          } else {
+            // Note off (velocity 0)
+            events.push({
+              type: 'off',
+              note,
+              velocity: 0,
+              time: absoluteTime * 2
+            });
+          }
+        } else if ((eventType & 0xF0) === 0x80) {
+          // Note off
+          const note = dataView.getUint8(offset++);
+          dataView.getUint8(offset++); // velocity
+          events.push({
+            type: 'off',
+            note,
+            velocity: 0,
+            time: absoluteTime * 2
+          });
+        } else {
+          // Other event, skip
+          offset++;
+        }
+      }
+      break; // Only process first track
+    }
+    offset++;
+  }
+  
+  return events.sort((a, b) => a.time - b.time);
 } 

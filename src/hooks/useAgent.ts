@@ -269,7 +269,7 @@ export function useAgent(pianoControls: PianoControls): UseAgentReturn {
 
 
       if (!conversationToken) {
-        throw new Error('OpenAI API key not found. Please set VITE_OPENAI_KEY.');
+        throw new Error('Failed to obtain conversation token');
       }
 
       // Request microphone permission
