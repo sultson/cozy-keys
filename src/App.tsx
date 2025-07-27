@@ -8,14 +8,15 @@ import { Piano } from './components/Piano';
 import { RecordingsList } from './components/RecordingsList';
 import { PresetSelect } from './components/PresetSelect';
 import { Button } from '@/components/ui/button';
-import { Mic, CheckCircle, AlertCircle, PianoIcon, Settings2, Square, VolumeX, Volume2, Loader2, BookHeart } from 'lucide-react';
+import { Mic, CheckCircle, AlertCircle, PianoIcon, Settings2, Square, VolumeX, Volume2, Loader2, BookHeart} from 'lucide-react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ThemeProvider } from './components/theme-provider';
 import { ModeToggle } from './components/mode-toggle';
 import { Environments, type Environment } from './components/Environments';
 import { CountdownOverlay } from './components/CountdownOverlay';
-import { Slider } from './components/ui/slider';
 import useAuth from './hooks/useAuth';
+import Settings from './Settings';
+import Lessons from './components/Lessons';
 
 
 function App() {
@@ -50,7 +51,9 @@ function App() {
     error: coraError,
     muteSession: muteCoraSession,
     unmuteSession: unmuteCoraSession,
-    isMuted: isCoraSessionMuted
+    isMuted: isCoraSessionMuted,
+    playChordsTool,
+    lessons
   } = useAgent({ playNote, stopNote, initializeAudio });
   const { 
     isRecording, 
@@ -295,19 +298,19 @@ function App() {
       />
 
 
-      <div className={`absolute bottom-0 left-0 right-0 p-32 bg-background/80 backdrop-blur ${showSettings ? 'block' : 'hidden'} flex flex-col items-start justify-center h-full gap-4`}> 
-        <p>Release (unstable) {releaseTime / 1000}s</p>
-            <Slider 
-              min={0}
-              max={5000}
-              step={100}
-              value={[releaseTime]}
-              onValueChange={(value) => setReleaseTime(value[0])}
-              
-            />
-            </div>
-      </div>
-        <ErrorBoundary>
+        <Settings
+          showSettings={showSettings}
+          releaseTime={releaseTime}
+          setReleaseTime={setReleaseTime}
+          playChordsTool={playChordsTool}
+        />
+        </div>
+  
+        { isCoraActive && lessons && lessons.length > 0 && (
+          <Lessons lessons={lessons} />
+        )}
+    
+        <ErrorBoundary fallback={<div>Could not load recordings</div>}>
         <RecordingsList 
           recordings={recordings}
           cloudRecordings={cloudRecordings}
