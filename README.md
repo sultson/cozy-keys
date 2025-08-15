@@ -74,7 +74,7 @@ Login to ElevenLabs [Convai CLI](https://elevenlabs.io/docs/conversational-ai/li
 Run this command to sync the agent with your ElevenLabs account:
 
 ```bash
-npx onvai sync --agent cora
+npx convai sync --agent cora
 ```
 
 
