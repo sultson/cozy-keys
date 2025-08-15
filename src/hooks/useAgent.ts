@@ -177,9 +177,9 @@ export function useAgent(pianoControls: PianoControls): UseAgentReturn {
   }) => {
     try {
 
-      const bass = options.bass || true;
-      const lowBass = options.lowBass || true;
-      const arp = options.arp || true;
+      const bass = options.bass || false;
+      const lowBass = options.lowBass || false;
+      const arp = options.arp || false;
 
       if (!chords?.length) throw new Error("No chords provided");
   

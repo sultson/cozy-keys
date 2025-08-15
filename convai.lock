@@ -1,9 +1,9 @@
 {
     "agents": {
-        "Cora from Cozy Keys": {
+        "cora": {
             "prod": {
                 "id": "agent_5001k139b761fpns2cy95f0bsd71",
-                "hash": "5fda6d3043ae4ee426808a14b26e8b5e"
+                "hash": "fa0a99a06773e09ab2e76ae7d945d0fe"
             }
         }
     },

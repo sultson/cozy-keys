@@ -77,6 +77,8 @@
                         "name": "playChordsTool",
                         "description": "Play chords for the user.",
                         "responseTimeoutSecs": 7,
+                        "disable_interruptions": false,
+                        "force_pre_tool_speech": false,
                         "assignments": [],
                         "parameters": {
                             "type": "object",
@@ -99,6 +101,35 @@
                                         "description": " ",
                                         "dynamic_variable": "",
                                         "constant_value": ""
+                                    }
+                                },
+                                "options": {
+                                    "type": "object",
+                                    "required": [
+                                        "arp",
+                                        "bass",
+                                        "lowBass"
+                                    ],
+                                    "description": "Additional options to guide the chords tool",
+                                    "properties": {
+                                        "lowBass": {
+                                            "type": "boolean",
+                                            "description": "Add 2x lower octave bass to each chord. Defaults to false.",
+                                            "dynamic_variable": "",
+                                            "constant_value": ""
+                                        },
+                                        "bass": {
+                                            "type": "boolean",
+                                            "description": "Add lower octave bass to each chord. Defaults to false",
+                                            "dynamic_variable": "",
+                                            "constant_value": ""
+                                        },
+                                        "arp": {
+                                            "type": "boolean",
+                                            "description": "Play chords as arpeggio. Defaults to false.",
+                                            "dynamic_variable": "",
+                                            "constant_value": ""
+                                        }
                                     }
                                 }
                             }
@@ -147,6 +178,8 @@
             "micMutingEnabled": false,
             "transcriptEnabled": false,
             "textInputEnabled": true,
+            "default_expanded": false,
+            "always_expanded": false,
             "textContents": {
                 "start_chat": null,
                 "chatting_status": null,
@@ -192,7 +225,8 @@
                     "firstMessage": false,
                     "language": false,
                     "prompt": {
-                        "prompt": false
+                        "prompt": false,
+                        "native_mcp_server_ids": false
                     }
                 }
             },
@@ -243,7 +277,7 @@
     },
     "accessInfo": {
         "isCreator": true,
-        "creatorName": "Rohekael Part",
+        "creatorName": "rohekaelpart@gmail.com",
         "creatorEmail": "rohekaelpart@gmail.com",
         "role": "admin"
     },
