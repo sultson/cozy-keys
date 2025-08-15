@@ -65,7 +65,10 @@ function App() {
     startRecording, 
     stopRecording, 
     recordEvent, 
-    refreshRecordings
+    refreshRecordings,
+    loadMoreRecordings,
+    hasMoreRecordings,
+    isLoadingMore
   } = useRecording();
 
   const stopPlayback = useCallback(() => {
@@ -188,15 +191,8 @@ function App() {
           <div className="flex items-center gap-3">
             <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground ml-2"><PianoIcon className="w-4 h-4" /></span>
             <span className="font-bold text-xl tracking-tight text-primary">Cozy Keys</span>
-          </div>
-          
-          <div className="fixed right-1/2">
-            <Environments onEnvironmentChange={handleEnvironmentChange} />
-          </div>
-
-          <div className="flex items-center gap-2">
               {/* MIDI and Audio Status */}
-              <div className="flex items-center gap-2 pr-2">
+              <div className="flex items-center gap-2 pr-2 ml-4 mt-0.5">
                 {midiConnected ? (
                   <CheckCircle className="w-4 h-4 text-green-400" aria-label="MIDI Connected" />
                 ) : (
@@ -205,6 +201,14 @@ function App() {
                 <span className="text-xs text-muted-foreground">{midiStatus}</span>
               </div>
               
+          </div>
+          
+          <div className="fixed right-1/2">
+            <Environments onEnvironmentChange={handleEnvironmentChange} />
+          </div>
+
+          <div className="flex items-center gap-2">
+            
               
               <PresetSelect 
                 currentPreset={currentPreset}
@@ -266,6 +270,9 @@ function App() {
           userId={userId}
           isLoading={isLoading}
           onRefresh={refreshRecordings}
+          onLoadMore={loadMoreRecordings}
+          hasMoreRecordings={hasMoreRecordings}
+          isLoadingMore={isLoadingMore}
         />
       </ErrorBoundary>
       </div>

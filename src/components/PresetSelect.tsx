@@ -16,9 +16,10 @@ interface PresetSelectProps {
 const presetLabels: Record<SoundPreset, string> = {
   'grand-piano': 'Grand Piano',
   'juno': 'Juno Synth',
+  'organ': 'Hammond Organ',
   'kalimba': 'Kalimba',
   'moog': 'Moog',
-  'ob-xa-brass': 'OB-Xa Brass'
+  'ob-xa-brass': 'OB-Xa Brass',
 };
 
 export function PresetSelect({ currentPreset, onPresetChange, availablePresets }: PresetSelectProps) {

@@ -25,6 +25,9 @@ interface RecordingsListProps {
   userId?: string;
   isLoading?: boolean;
   onRefresh?: () => void;
+  onLoadMore?: () => void;
+  hasMoreRecordings?: boolean;
+  isLoadingMore?: boolean;
 }
 
 interface RecordingItemProps {
@@ -414,7 +417,10 @@ export function RecordingsList({
   isSoundOn, 
   userId,
   isLoading,
-  onRefresh
+  onRefresh,
+  onLoadMore,
+  hasMoreRecordings = false,
+  isLoadingMore = false
 }: RecordingsListProps) {
   const [activeTab, setActiveTab] = useState('all');
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -524,6 +530,20 @@ export function RecordingsList({
               onEditTitle={handleEditTitle}
             />
           ))}
+          
+          {/* Show older recordings button */}
+          {hasMoreRecordings && onLoadMore && (
+            <div className="flex justify-center py-6">
+              <Button
+                variant="outline"
+                onClick={onLoadMore}
+                disabled={isLoadingMore}
+                className="px-8"
+              >
+                {isLoadingMore ? 'Loading...' : 'Show older recordings'}
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="Me" className="space-y-4">
@@ -536,6 +556,20 @@ export function RecordingsList({
               onEditTitle={handleEditTitle}
             />
           ))}
+          
+          {/* Show older recordings button (for "Me" tab) */}
+          {hasMoreRecordings && onLoadMore && (
+            <div className="flex justify-center py-6">
+              <Button
+                variant="outline"
+                onClick={onLoadMore}
+                disabled={isLoadingMore}
+                className="px-8"
+              >
+                {isLoadingMore ? 'Loading...' : 'Show older recordings'}
+              </Button>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

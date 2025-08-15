@@ -2,7 +2,7 @@ import { grandPiano } from '@/utils/grandPiano';
 import { useEffect, useRef, useCallback, useState } from 'react';
 import * as Tone from 'tone';
 
-export type SoundPreset = 'juno' | 'grand-piano' | 'kalimba' | 'moog' | 'ob-xa-brass';
+export type SoundPreset = 'juno' | 'grand-piano' | 'kalimba' | 'moog' | 'ob-xa-brass' | 'organ';
 
 export type Environment = 'quiet' | 'nature' | 'cosmic';
 
@@ -55,7 +55,7 @@ export function useSound(): UseSoundReturn {
 
 
 
-  const availablePresets: SoundPreset[] = ['juno', 'grand-piano', 'kalimba', 'moog', 'ob-xa-brass'];
+  const availablePresets: SoundPreset[] = ['juno', 'grand-piano', 'organ','kalimba', 'moog', 'ob-xa-brass'];
 
   // Environment-based reverb and delay settings
   const getEnvironmentReverbSettings = useCallback((environment: Environment) => {
@@ -183,6 +183,42 @@ export function useSound(): UseSoundReturn {
     return { synth, chorus };
   }, []);
 
+  const createOrganPreset = useCallback(() => {
+    // Create a Hammond-style organ with proper drawbar harmonics
+    const chorus = new Tone.Chorus({
+      frequency: 3.0,
+      delayTime: 2.0,
+      depth: 0.8,
+      feedback: 0.1,
+      spread: 180,
+      wet: 0.6
+    }).start();
+
+
+    // Create multiple oscillators for Hammond drawbar effect
+    const synth = new Tone.PolySynth(Tone.Synth, {
+      oscillator: {
+        type: 'fatsine4', // Multiple sine waves with 8 harmonics
+        spread:20,        // Detune oscillators by 25 cents for richness
+        count: 2          // Use 3 detuned oscillators per note
+      },
+      envelope: {
+        attack: 0.01,  // Very quick attack like real organ
+        decay: 0.05,
+        sustain: 0.95, // High sustain
+        release: 0.3   // Quick release
+      }
+    });
+    
+    // Set polyphony for rich chords
+    synth.maxPolyphony = 32;
+    
+    // Connect synth through distortion to chorus for authentic Hammond sound
+    synth.connect(chorus);
+
+    return { synth, chorus };
+  }, []);
+
   
 
   const createPreset = useCallback((preset: SoundPreset) => {
@@ -197,10 +233,12 @@ export function useSound(): UseSoundReturn {
         return createMoogPreset();
       case 'ob-xa-brass':
         return createOBXaBrassPreset();
+      case 'organ':
+        return createOrganPreset();
       default:
         return createGrandPianoPreset();
     }
-  }, [createGrandPianoPreset, createJunoPreset, createKalimbaPreset, createMoogPreset, createOBXaBrassPreset]);
+  }, [createGrandPianoPreset, createJunoPreset, createKalimbaPreset, createMoogPreset, createOBXaBrassPreset, createOrganPreset]);
 
   const initializeAudio = useCallback(async (envOverride?: Environment) => {
     if (isInitializedRef.current) return;

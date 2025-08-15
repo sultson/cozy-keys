@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import * as Tone from 'tone';
-import { getRecordings, uploadRecording, getUserCountry, type RecordingData } from '../lib/api';
+import { getRecordingsPaginated, uploadRecording, getUserCountry, type RecordingData } from '../lib/api';
 import { toast } from 'sonner';
 
 export interface RecordingEvent {
@@ -27,6 +27,9 @@ interface UseRecordingReturn {
   stopRecording: () => void;
   recordEvent: (type: 'on' | 'off', note: number, velocity: number) => void;
   refreshRecordings: () => Promise<void>;
+  loadMoreRecordings: () => Promise<void>;
+  hasMoreRecordings: boolean;
+  isLoadingMore: boolean;
 }
 
 
@@ -82,6 +85,9 @@ export function useRecording(): UseRecordingReturn {
   const [isRecording, setIsRecording] = useState(false);
   const [recordings, setRecordings] = useState<RecordingData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreRecordings, setHasMoreRecordings] = useState(true);
+  const [currentOffset, setCurrentOffset] = useState(0);
   const currentRecordingRef = useRef<Recording | null>(null);
   const isRecordingRef = useRef<boolean>(false);
 
@@ -380,14 +386,36 @@ export function useRecording(): UseRecordingReturn {
   const refreshRecordings = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     try {
-      const cloudRecs = await getRecordings();
+      const cloudRecs = await getRecordingsPaginated(10, 0);
       setRecordings(cloudRecs);
+      setCurrentOffset(10);
+      setHasMoreRecordings(cloudRecs.length === 10);
     } catch (error) {
       console.error('Error refreshing recordings:', error);
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  const loadMoreRecordings = useCallback(async (): Promise<void> => {
+    if (isLoadingMore || !hasMoreRecordings) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const moreRecordings = await getRecordingsPaginated(10, currentOffset);
+      if (moreRecordings.length > 0) {
+        setRecordings(prev => [...prev, ...moreRecordings]);
+        setCurrentOffset(prev => prev + moreRecordings.length);
+        setHasMoreRecordings(moreRecordings.length === 10);
+      } else {
+        setHasMoreRecordings(false);
+      }
+    } catch (error) {
+      console.error('Error loading more recordings:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [currentOffset, hasMoreRecordings, isLoadingMore]);
 
   // Load recordings from cloud on mount
   useEffect(() => {
@@ -402,6 +430,9 @@ export function useRecording(): UseRecordingReturn {
     stopRecording,
     recordEvent,
     refreshRecordings,
+    loadMoreRecordings,
+    hasMoreRecordings,
+    isLoadingMore,
   };
 }
 

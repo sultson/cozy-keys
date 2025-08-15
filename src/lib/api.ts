@@ -268,22 +268,23 @@ export async function getRecording(id: string): Promise<RecordingData | null> {
   }
 }
 
-// Get all recordings from Supabase
-export async function getRecordings(): Promise<RecordingData[]> {
+// Get recordings with pagination
+export async function getRecordingsPaginated(limit: number = 10, offset: number = 0): Promise<RecordingData[]> {
   try {
     const { data, error } = await supabase
       .from('recordings')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (error) {
-      console.error('Error fetching recordings:', error);
+      console.error('Error fetching paginated recordings:', error);
       return [];
     }
 
     return data as RecordingData[];
   } catch (error) {
-    console.error('Error fetching recordings:', error);
+    console.error('Error fetching paginated recordings:', error);
     return [];
   }
 }
