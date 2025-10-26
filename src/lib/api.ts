@@ -1,5 +1,6 @@
 import supabase from './supabase';
 import type { Recording, RecordingEvent } from '../hooks/useRecording';
+import { ticksToMs, MICROSECONDS_PER_QUARTER } from '../utils/midiTiming';
 
 export interface RecordingData {
   id?: string; // UUID
@@ -20,6 +21,12 @@ export interface UploadRecordingParams {
   title?: string; // Make title optional for immediate uploads
   country: string;
   isPublic?: boolean;
+}
+
+export interface RecordingEventsResult {
+  events: RecordingEvent[];
+  hasTempoMeta: boolean;
+  microsecondsPerQuarter: number;
 }
 
 
@@ -517,7 +524,7 @@ export async function updateRecordingTitle(id: string, newTitle: string): Promis
 }
 
 // Get MIDI events from a recording for synchronized playback
-export async function getRecordingEvents(recordingId: string): Promise<RecordingEvent[]> {
+export async function getRecordingEvents(recordingId: string): Promise<RecordingEventsResult> {
   try {
     // First get the recording to find the MIDI URL
     const { data: recording, error: fetchError } = await supabase
@@ -528,28 +535,29 @@ export async function getRecordingEvents(recordingId: string): Promise<Recording
 
     if (fetchError || !recording.midi) {
       console.error('Error fetching recording or no MIDI data:', fetchError);
-      return [];
+      return { events: [], hasTempoMeta: false, microsecondsPerQuarter: MICROSECONDS_PER_QUARTER };
     }
 
     // Fetch the MIDI file
     const response = await fetch(recording.midi);
     const midiBlob = await response.blob();
-    const arrayBuffer = await midiBlob.arrayBuffer();
+  	const arrayBuffer = await midiBlob.arrayBuffer();
     
     // Decode MIDI data to get events
-    const events = decodeMidiToEvents(arrayBuffer);
-    return events;
+    return decodeMidiToEvents(arrayBuffer);
   } catch (error) {
     console.error('Error getting recording events:', error);
-    return [];
+    return { events: [], hasTempoMeta: false, microsecondsPerQuarter: MICROSECONDS_PER_QUARTER };
   }
 }
 
 // Simple MIDI decoder to extract note events
-function decodeMidiToEvents(arrayBuffer: ArrayBuffer): RecordingEvent[] {
+function decodeMidiToEvents(arrayBuffer: ArrayBuffer): RecordingEventsResult {
   const events: RecordingEvent[] = [];
   const dataView = new DataView(arrayBuffer);
   let offset = 0;
+  let microsecondsPerQuarter = MICROSECONDS_PER_QUARTER;
+  let hasTempoMeta = false;
   
   // Skip MIDI header
   if (dataView.getUint32(0) === 0x4D546864) { // 'MThd'
@@ -579,13 +587,20 @@ function decodeMidiToEvents(arrayBuffer: ArrayBuffer): RecordingEvent[] {
         const eventType = dataView.getUint8(offset++);
         
         if (eventType === 0xFF) {
-          // Meta event, skip
-          dataView.getUint8(offset++); // metaType
+          const metaType = dataView.getUint8(offset++);
           let metaLength = 0;
           do {
             byte = dataView.getUint8(offset++);
             metaLength = (metaLength << 7) | (byte & 0x7F);
           } while (byte & 0x80);
+          const metaStart = offset;
+          if (metaType === 0x51 && metaLength === 3) {
+            hasTempoMeta = true;
+            microsecondsPerQuarter =
+              (dataView.getUint8(metaStart) << 16) |
+              (dataView.getUint8(metaStart + 1) << 8) |
+              dataView.getUint8(metaStart + 2);
+          }
           offset += metaLength;
         } else if ((eventType & 0xF0) === 0x90) {
           // Note on
@@ -596,7 +611,7 @@ function decodeMidiToEvents(arrayBuffer: ArrayBuffer): RecordingEvent[] {
               type: 'on',
               note,
               velocity: velocity / 127,
-              time: absoluteTime * 2 // Convert ticks to milliseconds (assuming 480 ticks/quarter)
+              time: ticksToMs(absoluteTime, microsecondsPerQuarter)
             });
           } else {
             // Note off (velocity 0)
@@ -604,7 +619,7 @@ function decodeMidiToEvents(arrayBuffer: ArrayBuffer): RecordingEvent[] {
               type: 'off',
               note,
               velocity: 0,
-              time: absoluteTime * 2
+              time: ticksToMs(absoluteTime, microsecondsPerQuarter)
             });
           }
         } else if ((eventType & 0xF0) === 0x80) {
@@ -615,7 +630,7 @@ function decodeMidiToEvents(arrayBuffer: ArrayBuffer): RecordingEvent[] {
             type: 'off',
             note,
             velocity: 0,
-            time: absoluteTime * 2
+            time: ticksToMs(absoluteTime, microsecondsPerQuarter)
           });
         } else {
           // Other event, skip
@@ -627,5 +642,10 @@ function decodeMidiToEvents(arrayBuffer: ArrayBuffer): RecordingEvent[] {
     offset++;
   }
   
-  return events.sort((a, b) => a.time - b.time);
+  events.sort((a, b) => a.time - b.time);
+  return {
+    events,
+    hasTempoMeta,
+    microsecondsPerQuarter,
+  };
 } 

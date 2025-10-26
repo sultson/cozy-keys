@@ -177,9 +177,12 @@ export default function RecordingDetail() {
   // Draw waveform with progress
   useEffect(() => {
     if (!canvasRef.current || !waveformData) return;
-    
-    const progress = duration > 0 ? currentTime / duration : 0;
-    
+
+    const audioDuration = duration > 0 && isFinite(duration) ? duration : 0;
+    const storedDuration = recording?.duration || 0;
+    const referenceDuration = audioDuration > 0 ? audioDuration : storedDuration;
+    const progress = referenceDuration > 0 ? Math.min(1, currentTime / referenceDuration) : 0;
+
     drawWaveform({
       canvas: canvasRef.current,
       data: waveformData,
@@ -193,7 +196,7 @@ export default function RecordingDetail() {
         centerLineColor: 'rgba(137, 137, 137, 0.5)',
       }
     });
-  }, [waveformData, currentTime, duration]);
+  }, [waveformData, currentTime, duration, recording?.duration]);
 
   if (isLoading) {
     return (
@@ -219,9 +222,10 @@ export default function RecordingDetail() {
     );
   }
 
-  const durationText = recording.duration ? 
-    formatDuration(recording.duration) : 
-    (duration > 0 ? formatDuration(duration) : '0:00');
+  const audioDuration = duration > 0 && isFinite(duration) ? duration : 0;
+  const storedDuration = recording.duration || 0;
+  const referenceDuration = audioDuration > 0 ? audioDuration : storedDuration;
+  const durationText = referenceDuration > 0 ? formatDuration(referenceDuration) : '0:00';
 
   const timestamp = recording.created_at ? new Date(recording.created_at) : new Date();
 

@@ -242,10 +242,11 @@ function RecordingItem({ recording, userId, onRefresh, onEditTitle }: RecordingI
 
   // Redraw on progress
   useEffect(() => {
-    const storedDuration = recording.duration || 0;
     const audioDuration = duration > 0 && isFinite(duration) ? duration : 0;
-    const finalDuration = storedDuration > 0 ? storedDuration : audioDuration;
-    drawWaveformWithProgress(finalDuration > 0 ? currentTime / finalDuration : 0);
+    const storedDuration = recording.duration || 0;
+    const referenceDuration = audioDuration > 0 ? audioDuration : storedDuration;
+    const progress = referenceDuration > 0 ? Math.min(1, currentTime / referenceDuration) : 0;
+    drawWaveformWithProgress(progress);
   }, [currentTime, duration, isPlaying, recording.duration, drawWaveformWithProgress]);
 
   useEffect(() => {
@@ -288,9 +289,9 @@ function RecordingItem({ recording, userId, onRefresh, onEditTitle }: RecordingI
   }, [drawWaveformWithProgress]);
 
   // Use stored duration from database, fallback to audio element duration, then to 0
-  const storedDuration = recording.duration || 0;
   const audioDuration = duration > 0 && isFinite(duration) ? duration : 0;
-  const finalDuration = storedDuration > 0 ? storedDuration : audioDuration;
+  const storedDuration = recording.duration || 0;
+  const finalDuration = audioDuration > 0 ? audioDuration : storedDuration;
   const durationText = finalDuration > 0 ? formatDuration(finalDuration) : '0:00';
 
   // Safely handle timestamp with fallback

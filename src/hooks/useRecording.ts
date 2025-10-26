@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import * as Tone from 'tone';
 import { getRecordingsPaginated, uploadRecording, getUserCountry, type RecordingData } from '../lib/api';
+import { msToTicks, MICROSECONDS_PER_QUARTER } from '../utils/midiTiming';
 import { toast } from 'sonner';
 
 export interface RecordingEvent {
@@ -59,10 +60,23 @@ function encodeMidi(events: RecordingEvent[]): Uint8Array {
     ...[0x01,0xe0], // 480 ticks/quarter
   ];
   const track: number[] = [0x4d,0x54,0x72,0x6b,0,0,0,0]; // 'MTrk' + length placeholder
-  let lastTime = 0;
+
+  // Tempo meta event so external players stay aligned (60 BPM baseline)
+  track.push(
+    0x00,
+    0xFF,
+    0x51,
+    0x03,
+    (MICROSECONDS_PER_QUARTER >>> 16) & 0xFF,
+    (MICROSECONDS_PER_QUARTER >>> 8) & 0xFF,
+    MICROSECONDS_PER_QUARTER & 0xFF
+  );
+
+  let lastTick = 0;
   for (const ev of events) {
-    const delta = Math.round(ev.time * 0.48 - lastTime); // ms to ticks
-    lastTime += delta;
+    const eventTick = msToTicks(ev.time);
+    const delta = Math.max(0, eventTick - lastTick);
+    lastTick = eventTick;
     track.push(...writeVarLen(delta));
     if (ev.type === 'on') {
       track.push(0x90, ev.note, Math.max(1, Math.round(ev.velocity * 127)));

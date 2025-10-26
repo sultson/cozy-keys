@@ -1,4 +1,5 @@
 import type { Environment } from '@/hooks/useSound';
+import type { RecordingEvent } from '@/hooks/useRecording';
 import { useEffect, useRef, useCallback } from 'react';
 
 interface PianoProps {
@@ -32,6 +33,11 @@ export function Piano({
   
   const activeNotesRef = useRef<Set<number>>(new Set());
   const playbackNotesRef = useRef<Set<number>>(new Set());
+  const playbackEventsRef = useRef<RecordingEvent[]>([]);
+  const playbackEventIndexRef = useRef(0);
+  const playbackRafRef = useRef<number | null>(null);
+  const playbackLastTimeRef = useRef(0);
+  const playbackRequestIdRef = useRef(0);
   const keyAnimationsRef = useRef<Map<number, KeyAnimation>>(new Map());
   const animationIdRef = useRef<number | null>(null);
   const pointerDownRef = useRef<boolean>(false);
@@ -515,10 +521,17 @@ export function Piano({
   }, [handleMIDIMessage, onMidiStatusChange]);
 
   const clearPlaybackVisualization = useCallback(() => {
+    if (playbackRafRef.current !== null) {
+      cancelAnimationFrame(playbackRafRef.current);
+      playbackRafRef.current = null;
+    }
+    playbackEventsRef.current = [];
+    playbackEventIndexRef.current = 0;
+    playbackLastTimeRef.current = 0;
     playbackNotesRef.current.forEach(note => {
-        if (!activeNotesRef.current.has(note)) {
-            animateKey(note, false);
-        }
+      if (!activeNotesRef.current.has(note)) {
+        animateKey(note, false);
+      }
     });
     playbackNotesRef.current.clear();
   }, [animateKey]);
@@ -528,51 +541,128 @@ export function Piano({
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.startSynchronizedPlayback = async (recordingId: string, audioElement: HTMLAudioElement) => {
+        const requestId = playbackRequestIdRef.current + 1;
+        playbackRequestIdRef.current = requestId;
         clearPlaybackVisualization();
         
+        if (!audioElement) {
+          console.warn('No audio element provided for synchronized playback');
+          return;
+        }
+
         try {
-          // Import the function to get recording events
           const { getRecordingEvents } = await import('../lib/api');
-          const events = await getRecordingEvents(recordingId);
-          
-          if (events.length === 0) {
+          const { events: rawEvents, hasTempoMeta } = await getRecordingEvents(recordingId);
+
+          if (rawEvents.length === 0) {
             console.warn('No events found for synchronized playback');
             return;
           }
-          
-          // Create a synchronized playback system
-          const checkEvents = () => {
+
+          if (playbackRequestIdRef.current !== requestId) {
+            return;
+          }
+
+          const ensureAudioDurationMs = async (): Promise<number | undefined> => {
+            if (!audioElement) return undefined;
+            const readDuration = () => {
+              const { duration } = audioElement;
+              if (!duration || !isFinite(duration) || duration <= 0) {
+                return undefined;
+              }
+              return duration * 1000;
+            };
+
+            const known = readDuration();
+            if (known !== undefined) {
+              return known;
+            }
+
+            return new Promise<number | undefined>((resolve) => {
+              const timeoutId = window.setTimeout(() => {
+                audioElement.removeEventListener('loadedmetadata', onLoadedMetadata);
+                resolve(readDuration());
+              }, 1500);
+
+              const onLoadedMetadata = () => {
+                window.clearTimeout(timeoutId);
+                audioElement.removeEventListener('loadedmetadata', onLoadedMetadata);
+                resolve(readDuration());
+              };
+
+              audioElement.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+            });
+          };
+
+          const audioDurationMs = await ensureAudioDurationMs();
+          const lastEventTime = rawEvents[rawEvents.length - 1]?.time ?? 0;
+          const needsScaling =
+            !hasTempoMeta &&
+            !!audioDurationMs &&
+            lastEventTime > 0 &&
+            Math.abs(audioDurationMs / lastEventTime - 1) > 0.05;
+
+          const scaledEvents = needsScaling
+            ? rawEvents.map((event) => ({
+                ...event,
+                time: event.time * (audioDurationMs! / lastEventTime),
+              }))
+            : rawEvents;
+
+          playbackEventsRef.current = scaledEvents;
+          playbackEventIndexRef.current = 0;
+          playbackLastTimeRef.current = 0;
+
+          const leadMs = 75; // Small visual lead feels responsive without obvious drift
+          const toleranceMs = 25;
+
+          const run = () => {
+            if (playbackRequestIdRef.current !== requestId) {
+              return;
+            }
+
             if (!audioElement || audioElement.paused) {
               clearPlaybackVisualization();
               return;
             }
-            
-            const currentTimeMs = audioElement.currentTime * 1000; // Convert to milliseconds
-            
-            // Find events that should be triggered at this time
-            events.forEach(event => {
-              const eventTimeMs = event.time;
-              const tolerance = 100; // 100ms tolerance for timing
-              const futureOffset = 150; // 150ms ahead of audio for better visual feedback
-              
-              // Check if we're approaching the event time (with future offset)
-              if (Math.abs(currentTimeMs - (eventTimeMs - futureOffset)) < tolerance) {
+
+            const currentTimeMs = audioElement.currentTime * 1000;
+
+            // Handle scrubbing backwards by resetting our pointers
+            if (currentTimeMs + toleranceMs < playbackLastTimeRef.current) {
+              playbackEventIndexRef.current = 0;
+              playbackNotesRef.current.forEach(note => {
+                if (!activeNotesRef.current.has(note)) {
+                  animateKey(note, false);
+                }
+              });
+              playbackNotesRef.current.clear();
+            }
+            playbackLastTimeRef.current = currentTimeMs;
+
+            const pendingEvents = playbackEventsRef.current;
+            while (playbackEventIndexRef.current < pendingEvents.length) {
+              const event = pendingEvents[playbackEventIndexRef.current];
+              const triggerTime = Math.max(0, event.time - leadMs);
+
+              if (triggerTime <= currentTimeMs + toleranceMs) {
                 if (event.type === 'on') {
                   playbackNotesRef.current.add(event.note);
                   animateKey(event.note, true);
-                } else if (event.type === 'off') {
+                } else {
                   playbackNotesRef.current.delete(event.note);
                   animateKey(event.note, false);
                 }
+                playbackEventIndexRef.current += 1;
+              } else {
+                break;
               }
-            });
-            
-            // Continue checking
-            requestAnimationFrame(checkEvents);
+            }
+
+            playbackRafRef.current = requestAnimationFrame(run);
           };
-          
-          // Start the synchronized playback
-          requestAnimationFrame(checkEvents);
+
+          playbackRafRef.current = requestAnimationFrame(run);
         } catch (error) {
           console.error('Error starting synchronized playback:', error);
         }
