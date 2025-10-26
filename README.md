@@ -1,6 +1,13 @@
 # 🎹 Cozy Keys
 
-Keys in a browser with AI instructor, cloud recording, and global sharing. Built on Supabase.
+Play & record MIDI right from your browser. 
+
+*Originally created for the [Supabase LW15 Hackathon](https://supabase.com/blog/lw15-hackathon) and awarded 2nd best overall project 🥈.*
+
+## Demo
+
+[![demo](https://cqjlgirrwebrsqqnvcsm.supabase.co/storage/v1/object/public/app-data/demo.webp)](https://www.loom.com/share/8cc623dbffa8426681dad11f9a90b753)
+
 
 ## Features
 
@@ -29,7 +36,7 @@ Keys in a browser with AI instructor, cloud recording, and global sharing. Built
 - Supabase (Auth, Database, Storage, Edge Functions)
 - ElevenLabs Conversational AI
 
-## 🛠️ Setup
+## Setup
 
 ### Prerequisites
 - Node.js 18+ 
