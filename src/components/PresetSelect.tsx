@@ -25,7 +25,7 @@ const presetLabels: Record<SoundPreset, string> = {
 export function PresetSelect({ currentPreset, onPresetChange, availablePresets }: PresetSelectProps) {
   return (
     <Select value={currentPreset} onValueChange={onPresetChange}>
-      <SelectTrigger className="w-[140px]">
+      <SelectTrigger className="w-full md:w-[140px] max-w-[200px] md:max-w-none">
         <SelectValue placeholder="Select preset" />
       </SelectTrigger>
       <SelectContent>

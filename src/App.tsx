@@ -6,19 +6,15 @@ import { useRecording } from './hooks/useRecording';
 import { useAgent } from './hooks/useAgent';
 import { Piano } from './components/Piano';
 import { RecordingsList } from './components/RecordingsList';
-import { PresetSelect } from './components/PresetSelect';
-import { Button } from '@/components/ui/button';
-import { Mic, CheckCircle, AlertCircle, PianoIcon, Settings2} from 'lucide-react';
+import { TopBar } from './components/TopBar';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './components/theme-provider';
-import { ModeToggle } from './components/mode-toggle';
-import { Environments, type Environment } from './components/Environments';
+import { type Environment } from './components/Environments';
 import { CountdownOverlay } from './components/CountdownOverlay';
 import useAuth from './hooks/useAuth';
 import Settings from './Settings';
 import Lessons from './components/Lessons';
 import { Toaster } from 'sonner';
-import Cora from './components/Cora';
 
 
 function App() {
@@ -185,58 +181,24 @@ function App() {
           isVisible={showCountdown} 
           onCountdownComplete={handleCountdownComplete} 
         />
-      {/* Header Bar */}
-      <header className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur p-4">
-        <div className="mx-auto flex items-center justify-between px-6 pt-3 gap-4">
-          <div className="flex items-center gap-3">
-            <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground ml-2"><PianoIcon className="w-4 h-4" /></span>
-            <span className="font-bold text-xl tracking-tight text-primary">Cozy Keys</span>
-              {/* MIDI and Audio Status */}
-              <div className="flex items-center gap-2 pr-2 ml-4 mt-0.5">
-                {midiConnected ? (
-                  <CheckCircle className="w-4 h-4 text-green-400" aria-label="MIDI Connected" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-yellow-400" aria-label="MIDI Not Connected" />
-                )}
-                <span className="text-xs text-muted-foreground">{midiStatus}</span>
-              </div>
-              
-          </div>
-          
-          <div className="fixed right-1/2">
-            <Environments onEnvironmentChange={handleEnvironmentChange} />
-          </div>
-
-          <div className="flex items-center gap-2">
-            
-              
-              <PresetSelect 
-                currentPreset={currentPreset}
-                onPresetChange={setPreset}
-                availablePresets={availablePresets}
-              />
-              <ModeToggle />
-              <Button 
-                size="icon"
-                variant={showSettings ? "default" : "outline"}
-                onClick={() => setShowSettings(!showSettings)}
-              >
-                <Settings2 className="w-5 h-5" />
-              </Button>
-              <Cora isCoraActive={isCoraActive} isCoraConnecting={isCoraConnecting} toggleCora={toggleCora} toggleCoraMute={toggleCoraMute} isCoraSessionMuted={isCoraSessionMuted} coraError={coraError || ''} />
-              <Button 
-                size="icon"
-                variant={isRecording ? "destructive" : "default"}
-                onClick={toggleRecording}
-                className={`rounded-full ${isRecording ? 'animate-pulse' : ''} ml-4`}
-                title={isRecording ? 'Stop Recording' : 'Start Recording'}
-                
-              >
-                <Mic className="w-5 h-5" />
-              </Button>
-            </div>
-        </div>
-      </header>
+      <TopBar
+        midiConnected={midiConnected}
+        midiStatus={midiStatus}
+        currentPreset={currentPreset}
+        onPresetChange={setPreset}
+        availablePresets={availablePresets}
+        showSettings={showSettings}
+        onSettingsToggle={() => setShowSettings(!showSettings)}
+        isCoraActive={isCoraActive}
+        isCoraConnecting={isCoraConnecting}
+        onToggleCora={toggleCora}
+        onToggleCoraMute={toggleCoraMute}
+        isCoraSessionMuted={isCoraSessionMuted}
+        coraError={coraError || ''}
+        isRecording={isRecording}
+        onToggleRecording={toggleRecording}
+        onEnvironmentChange={handleEnvironmentChange}
+      />
 
       {/* Main Content */}
       <div className="relative">
