@@ -1,5 +1,5 @@
 import type { Environment } from '@/hooks/useSound';
-import  { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 
 interface PianoProps {
   playNote: (note: number, velocity?: number) => void;
@@ -16,28 +16,33 @@ interface KeyAnimation {
   target: number;
 }
 
-export function Piano({ 
-  playNote, 
-  stopNote, 
-  onNoteOn, 
-  onNoteOff, 
-  onMidiStatusChange, 
-  isSoundOn = true, 
+export function Piano({
+  playNote,
+  stopNote,
+  onNoteOn,
+  onNoteOff,
+  onMidiStatusChange,
+  isSoundOn = true,
   environment
 }: PianoProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Refs for layered canvases
+  const backgroundCanvasRef = useRef<HTMLCanvasElement>(null);
+  const activeKeysCanvasRef = useRef<HTMLCanvasElement>(null);
+  const mechanicsCanvasRef = useRef<HTMLCanvasElement>(null);
+  
   const activeNotesRef = useRef<Set<number>>(new Set());
-  const playbackNotesRef = useRef<Set<number>>(new Set()); // NEW: track playback notes
+  const playbackNotesRef = useRef<Set<number>>(new Set());
   const keyAnimationsRef = useRef<Map<number, KeyAnimation>>(new Map());
   const animationIdRef = useRef<number | null>(null);
   const pointerDownRef = useRef<boolean>(false);
   const pointerNoteRef = useRef<number | null>(null);
   const isMidiConnectedRef = useRef<boolean>(false);
 
+  // Piano dimensions - unchanged
   const whiteKeys = 52;
   const keyWidth = 1400 / whiteKeys;
-  const keyHeight = 200; // Keys take up bottom 200px
-  const mechanicsHeight = 100; // Top 100px for strings/hammers
+  const keyHeight = 200;
+  const mechanicsHeight = 100;
 
   const isBlack = useCallback((note: number): boolean => {
     return [1, 3, 6, 8, 10].includes(note % 12);
@@ -47,115 +52,34 @@ export function Piano({
     switch (environment) {
       case 'nature':
         return {
-          stringBg: ['#2d5016', '#1a2e0e'], // Forest greens
-          blackStrings: '#4a7c59', // Moss green
-          whiteStrings: '#6b8e7a', // Sage green
-          pressedGlow: '#22c55e', // Bright green
-          pressedKey: '#16a34a', // Emerald green
+          stringBg: ['#2d5016', '#1a2e0e'],
+          blackStrings: '#4a7c59',
+          whiteStrings: '#6b8e7a',
+          pressedGlow: '#22c55e',
+          pressedKey: '#16a34a',
         };
       case 'cosmic':
         return {
-          stringBg: ['#1e1b4b', '#0f0f23'], // Deep space blues
-          blackStrings: '#6366f1', // Indigo
-          whiteStrings: '#8b5cf6', // Purple
-          pressedGlow: '#06b6d4', // Cyan
-          pressedKey: '#0891b2', // Sky blue
+          stringBg: ['#1e1b4b', '#0f0f23'],
+          blackStrings: '#6366f1',
+          whiteStrings: '#8b5cf6',
+          pressedGlow: '#06b6d4',
+          pressedKey: '#0891b2',
         };
-      default: // studio/quiet
+      default:
         return {
-          stringBg: ['#2d3748', '#1a202c'], // Professional grays
-          blackStrings: '#4a5568', // Steel gray
-          whiteStrings: '#718096', // Light gray
-          pressedGlow: '#60a5fa', // Blue
-          pressedKey: '#3b82f6', // Professional blue
+          stringBg: ['#2d3748', '#1a202c'],
+          blackStrings: '#4a5568',
+          whiteStrings: '#718096',
+          pressedGlow: '#60a5fa',
+          pressedKey: '#3b82f6',
         };
     }
   }, [environment]);
 
-  const drawStrings = useCallback((ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
-    ctx.save();
-    
-    const colors = getEnvironmentColors();
-    
-    // String area background
-    const stringBg = ctx.createLinearGradient(0, 0, 0, mechanicsHeight);
-    stringBg.addColorStop(0, colors.stringBg[0]);
-    stringBg.addColorStop(1, colors.stringBg[1]);
-    ctx.fillStyle = stringBg;
-    ctx.fillRect(0, 0, canvas.width, mechanicsHeight);
-    
-    // Draw strings with environment colors
-    let whiteIndex = 0;
-    for (let i = 21; i <= 108; i++) {
-      const isBlackKey = isBlack(i);
-      let x;
-      
-      if (!isBlackKey) {
-        x = whiteIndex * keyWidth + keyWidth / 2;
-        whiteIndex++;
-      } else {
-        x = (whiteIndex - 1) * keyWidth + keyWidth * 0.85;
-      }
-      
-      // Environment-themed strings
-      ctx.strokeStyle = isBlackKey ? colors.blackStrings : colors.whiteStrings;
-      ctx.lineWidth = isBlackKey ? 1.2 : 0.8;
-      
-      // String vibration effect when pressed - more subtle
-      const vibration = activeNotesRef.current.has(i) ? Math.sin(Date.now() * 0.015) * 0.5 : 0;
-      
-      ctx.beginPath();
-      ctx.moveTo(x + vibration, 10);
-      ctx.lineTo(x + vibration * 0.3, mechanicsHeight - 10);
-      ctx.stroke();
-    }
-    
-    ctx.restore();
-  }, [isBlack, keyWidth, mechanicsHeight, getEnvironmentColors]);
-
-  const drawHammers = useCallback((ctx: CanvasRenderingContext2D) => {
-    ctx.save();
-    
-    let whiteIndex = 0;
-    for (let i = 21; i <= 108; i++) {
-      const isBlackKey = isBlack(i);
-      let x;
-      
-      if (!isBlackKey) {
-        x = whiteIndex * keyWidth + keyWidth / 2;
-        whiteIndex++;
-      } else {
-        x = (whiteIndex - 1) * keyWidth + keyWidth * 0.85;
-      }
-      
-      // Hammer animation
-      const anim = keyAnimationsRef.current.get(i);
-      const hammerOffset = anim ? anim.progress * 15 : 0;
-      const hammerY = mechanicsHeight - 30 - hammerOffset;
-      
-      // Hammer head - gray shades only
-      ctx.fillStyle = activeNotesRef.current.has(i) ? '#9ca3af' : '#6b7280';
-      ctx.beginPath();
-      ctx.ellipse(x, hammerY, 3, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Hammer arm - gray
-      ctx.strokeStyle = '#4b5563';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x, hammerY + 6);
-      ctx.lineTo(x - 8, hammerY + 20);
-      ctx.stroke();
-    }
-    
-    ctx.restore();
-  }, [isBlack, keyWidth, mechanicsHeight]);
-
   const drawKey3D = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, isPressed: boolean, isBlackKey: boolean = false, isPlayback: boolean = false) => {
     const depth = isBlackKey ? 6 : 10;
     const pressDepth = isPressed ? depth * 0.6 : depth;
-    
-    // Perspective calculations
     const perspectiveRatio = 0.85;
     const topY = y + height * 0.15;
     const topWidth = width * perspectiveRatio;
@@ -165,22 +89,21 @@ export function Piano({
     
     const colors = getEnvironmentColors();
     
-    // Softer shadow with perspective
+    // Shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
     const shadowY = y + height * 0.05 + (isPressed ? 1 : 2);
     ctx.fillRect(x + 1, shadowY, width, height * 0.95);
     
-    // Main key face with environment-specific pressed colors
+    // Main key face
     const gradient = ctx.createLinearGradient(x, y, x, y + height);
     if (isBlackKey) {
       if (isPressed) {
         if (isPlayback) {
-          // Gray colors for playback visualization
-          gradient.addColorStop(0, '#9ca3af'); // Light gray
+          gradient.addColorStop(0, '#9ca3af');
           gradient.addColorStop(0.5, '#6b7280');
           gradient.addColorStop(1, '#4b5563');
         } else {
-          gradient.addColorStop(0, colors.pressedGlow); // Environment-specific glow
+          gradient.addColorStop(0, colors.pressedGlow);
           gradient.addColorStop(0.5, colors.pressedKey);
           gradient.addColorStop(1, colors.pressedKey);
         }
@@ -192,22 +115,20 @@ export function Piano({
     } else {
       if (isPressed) {
         if (isPlayback) {
-          // Gray colors for playback visualization
-          gradient.addColorStop(0, '#e5e7eb'); // Light gray
+          gradient.addColorStop(0, '#e5e7eb');
           gradient.addColorStop(0.5, '#d1d5db');
           gradient.addColorStop(1, '#9ca3af');
         } else {
-          // Environment-specific white key pressed colors
           if (environment === 'nature') {
-            gradient.addColorStop(0, '#dcfce7'); // Light green
+            gradient.addColorStop(0, '#dcfce7');
             gradient.addColorStop(0.5, '#bbf7d0');
             gradient.addColorStop(1, '#22c55e');
           } else if (environment === 'cosmic') {
-            gradient.addColorStop(0, '#e0e7ff'); // Light blue
+            gradient.addColorStop(0, '#e0e7ff');
             gradient.addColorStop(0.5, '#c7d2fe');
             gradient.addColorStop(1, '#6366f1');
           } else {
-            gradient.addColorStop(0, '#fef3c7'); // Warm yellow (studio)
+            gradient.addColorStop(0, '#fef3c7');
             gradient.addColorStop(0.5, '#fde68a');
             gradient.addColorStop(1, '#f59e0b');
           }
@@ -220,7 +141,7 @@ export function Piano({
     }
     ctx.fillStyle = gradient;
     
-    // Draw trapezoid for perspective
+    // Trapezoid shape
     ctx.beginPath();
     ctx.moveTo(topX, topY);
     ctx.lineTo(topX + topWidth, topY);
@@ -229,77 +150,72 @@ export function Piano({
     ctx.closePath();
     ctx.fill();
     
-    // Enhanced glow for pressed keys with environment colors
+    // Glow
     if (isPressed) {
       const glowColor = isBlackKey ? colors.pressedGlow : 
         (environment === 'nature' ? '#22c55e' : 
          environment === 'cosmic' ? '#6366f1' : '#f59e0b');
-      
       ctx.shadowColor = glowColor;
       ctx.shadowBlur = 20;
       ctx.globalAlpha = 0.8;
       ctx.strokeStyle = glowColor;
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(topX, topY);
-      ctx.lineTo(topX + topWidth, topY);
-      ctx.lineTo(x + width, y + height);
-      ctx.lineTo(x, y + height);
-      ctx.closePath();
       ctx.stroke();
     }
     
-    // Top surface with blur and environment colors
+    ctx.restore();
+    ctx.save();
+
+    // Top surface
     ctx.filter = 'blur(1px)';
     const topGradient = ctx.createLinearGradient(topX, topY, topX, topY + pressDepth);
     if (isBlackKey) {
-      topGradient.addColorStop(0, isPressed ? colors.pressedGlow : '#94a3b8');
-      topGradient.addColorStop(1, isPressed ? colors.pressedKey : '#6b7280');
+        topGradient.addColorStop(0, isPressed ? colors.pressedGlow : '#94a3b8');
+        topGradient.addColorStop(1, isPressed ? colors.pressedKey : '#6b7280');
     } else {
-      if (isPressed) {
-        if (environment === 'nature') {
-          topGradient.addColorStop(0, '#dcfce7');
-          topGradient.addColorStop(1, '#22c55e');
-        } else if (environment === 'cosmic') {
-          topGradient.addColorStop(0, '#e0e7ff');
-          topGradient.addColorStop(1, '#6366f1');
+        if (isPressed) {
+            if (environment === 'nature') {
+                topGradient.addColorStop(0, '#dcfce7');
+                topGradient.addColorStop(1, '#22c55e');
+            } else if (environment === 'cosmic') {
+                topGradient.addColorStop(0, '#e0e7ff');
+                topGradient.addColorStop(1, '#6366f1');
+            } else {
+                topGradient.addColorStop(0, '#fef3c7');
+                topGradient.addColorStop(1, '#fde68a');
+            }
         } else {
-          topGradient.addColorStop(0, '#fef3c7');
-          topGradient.addColorStop(1, '#fde68a');
+            topGradient.addColorStop(0, '#ffffff');
+            topGradient.addColorStop(1, '#f1f5f9');
         }
-      } else {
-        topGradient.addColorStop(0, '#ffffff');
-        topGradient.addColorStop(1, '#f1f5f9');
-      }
     }
     ctx.fillStyle = topGradient;
     ctx.fillRect(topX, topY - pressDepth, topWidth, pressDepth);
     ctx.filter = 'none';
     
-    // Right edge with environment colors
+    // Right edge
     const rightGradient = ctx.createLinearGradient(x + width - 2, y, x + width, y);
     if (isBlackKey) {
-      rightGradient.addColorStop(0, isPressed ? colors.pressedKey : '#6b7280');
-      rightGradient.addColorStop(1, isPressed ? colors.pressedKey : '#4b5563');
+        rightGradient.addColorStop(0, isPressed ? colors.pressedKey : '#6b7280');
+        rightGradient.addColorStop(1, isPressed ? colors.pressedKey : '#4b5563');
     } else {
-      if (isPressed) {
-        if (environment === 'nature') {
-          rightGradient.addColorStop(0, '#bbf7d0');
-          rightGradient.addColorStop(1, '#22c55e');
-        } else if (environment === 'cosmic') {
-          rightGradient.addColorStop(0, '#c7d2fe');
-          rightGradient.addColorStop(1, '#6366f1');
+        if (isPressed) {
+            if (environment === 'nature') {
+                rightGradient.addColorStop(0, '#bbf7d0');
+                rightGradient.addColorStop(1, '#22c55e');
+            } else if (environment === 'cosmic') {
+                rightGradient.addColorStop(0, '#c7d2fe');
+                rightGradient.addColorStop(1, '#6366f1');
+            } else {
+                rightGradient.addColorStop(0, '#fde68a');
+                rightGradient.addColorStop(1, '#f59e0b');
+            }
         } else {
-          rightGradient.addColorStop(0, '#fde68a');
-          rightGradient.addColorStop(1, '#f59e0b');
+            rightGradient.addColorStop(0, '#f8fafc');
+            rightGradient.addColorStop(1, '#f1f5f9');
         }
-      } else {
-        rightGradient.addColorStop(0, '#f8fafc');
-        rightGradient.addColorStop(1, '#f1f5f9');
-      }
     }
     ctx.fillStyle = rightGradient;
-    
     ctx.beginPath();
     ctx.moveTo(topX + topWidth, topY);
     ctx.lineTo(topX + topWidth + 2, topY);
@@ -311,133 +227,244 @@ export function Piano({
     ctx.restore();
   }, [getEnvironmentColors, environment]);
 
-  const drawPiano = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw strings and hammers first
-    drawStrings(ctx, canvas);
-    drawHammers(ctx);
-    
-    // Background gradient for key area with environment colors
-    const bgGradient = ctx.createLinearGradient(0, mechanicsHeight, 0, canvas.height);
-    if (environment === 'nature') {
-      bgGradient.addColorStop(0, '#f0fdf4'); // Light green
-      bgGradient.addColorStop(1, '#dcfce7');
-    } else if (environment === 'cosmic') {
-      bgGradient.addColorStop(0, '#f8fafc'); // Light blue
-      bgGradient.addColorStop(1, '#e0e7ff');
-    } else {
-      bgGradient.addColorStop(0, '#f8fafc'); // Studio gray
-      bgGradient.addColorStop(1, '#e2e8f0');
-    }
-    ctx.fillStyle = bgGradient;
-    ctx.fillRect(0, mechanicsHeight, canvas.width, keyHeight);
-    
-    // Smooth transition gradient from key area to black bottom
-    const transitionGradient = ctx.createLinearGradient(0, canvas.height - 5, 0, canvas.height);
-    transitionGradient.addColorStop(0, '#94a3b8');
-    transitionGradient.addColorStop(0.3, '#94a3b8');
-    transitionGradient.addColorStop(0.7, '#94a3b8');
-    transitionGradient.addColorStop(1, '#000000');
-    ctx.fillStyle = transitionGradient;
-    ctx.fillRect(0, canvas.height - 5, canvas.width, 40);
+  const drawStrings = useCallback((ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+    // This function now draws only to the mechanics layer
+    ctx.save();
+    const colors = getEnvironmentColors();
+    const stringBg = ctx.createLinearGradient(0, 0, 0, mechanicsHeight);
+    stringBg.addColorStop(0, colors.stringBg[0]);
+    stringBg.addColorStop(1, colors.stringBg[1]);
+    ctx.fillStyle = stringBg;
+    ctx.fillRect(0, 0, canvas.width, mechanicsHeight);
     
     let whiteIndex = 0;
+    for (let i = 21; i <= 108; i++) {
+      const isBlackKey = isBlack(i);
+      const x = isBlackKey ? (whiteIndex - 1) * keyWidth + keyWidth * 0.85 : whiteIndex * keyWidth + keyWidth / 2;
+      
+      ctx.strokeStyle = isBlackKey ? colors.blackStrings : colors.whiteStrings;
+      ctx.lineWidth = isBlackKey ? 1.2 : 0.8;
+      
+      const vibration = activeNotesRef.current.has(i) ? Math.sin(Date.now() * 0.015) * 0.5 : 0;
+      
+      ctx.beginPath();
+      ctx.moveTo(x + vibration, 10);
+      ctx.lineTo(x + vibration * 0.3, mechanicsHeight - 10);
+      ctx.stroke();
 
-    // White keys
+      if (!isBlackKey) whiteIndex++;
+    }
+    ctx.restore();
+  }, [isBlack, keyWidth, mechanicsHeight, getEnvironmentColors]);
+  
+  const drawHammers = useCallback((ctx: CanvasRenderingContext2D) => {
+    // This function now draws only to the mechanics layer
+    ctx.save();
+    let whiteIndex = 0;
+    for (let i = 21; i <= 108; i++) {
+      const isBlackKey = isBlack(i);
+      const x = isBlackKey ? (whiteIndex - 1) * keyWidth + keyWidth * 0.85 : whiteIndex * keyWidth + keyWidth / 2;
+      
+      const anim = keyAnimationsRef.current.get(i);
+      const hammerOffset = anim ? anim.progress * 15 : 0;
+      const hammerY = mechanicsHeight - 30 - hammerOffset;
+      
+      ctx.fillStyle = activeNotesRef.current.has(i) ? '#9ca3af' : '#6b7280';
+      ctx.beginPath();
+      ctx.ellipse(x, hammerY, 3, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.strokeStyle = '#4b5563';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, hammerY + 6);
+      ctx.lineTo(x - 8, hammerY + 20);
+      ctx.stroke();
+
+      if (!isBlackKey) whiteIndex++;
+    }
+    ctx.restore();
+  }, [isBlack, keyWidth, mechanicsHeight]);
+
+  const drawAnimatedLayers = useCallback(() => {
+    const mechanicsCanvas = mechanicsCanvasRef.current;
+    const activeKeysCanvas = activeKeysCanvasRef.current;
+    if (!mechanicsCanvas || !activeKeysCanvas) return;
+
+    const mechanicsCtx = mechanicsCanvas.getContext('2d');
+    const activeKeysCtx = activeKeysCanvas.getContext('2d');
+    if (!mechanicsCtx || !activeKeysCtx) return;
+
+    // Clear only the dynamic layers
+    mechanicsCtx.clearRect(0, 0, mechanicsCanvas.width, mechanicsCanvas.height);
+    activeKeysCtx.clearRect(0, 0, activeKeysCanvas.width, activeKeysCanvas.height);
+
+    // Redraw dynamic mechanics (hammers and strings)
+    drawStrings(mechanicsCtx, mechanicsCanvas);
+    drawHammers(mechanicsCtx);
+
+    // --- START OF MODIFIED LOGIC ---
+
+    // A set to keep track of static black keys that need to be redrawn
+    // to appear on top of animating white keys.
+    const staticBlackKeysToRedraw = new Set<number>();
+
+    // First, draw all active WHITE keys. While doing so, identify any
+    // adjacent black keys that need to be redrawn for correct layering.
+    let whiteIndex = 0;
     for (let i = 21; i <= 108; i++) {
       if (!isBlack(i)) {
-        const x = whiteIndex * keyWidth;
         const anim = keyAnimationsRef.current.get(i);
-        const isPressed = anim ? anim.progress > 0.5 : false;
-        const pressOffset = anim ? anim.progress * 8 : 0;
-        const isPlayback = playbackNotesRef.current.has(i) && !activeNotesRef.current.has(i);
-        
-        drawKey3D(ctx, x + 2, mechanicsHeight + pressOffset, keyWidth - 4, keyHeight - 4, isPressed, false, isPlayback);
+        if (anim && anim.progress > 0) {
+          const x = whiteIndex * keyWidth;
+          const pressOffset = anim.progress * 8;
+          const isPressed = anim.progress > 0.5;
+          const isPlayback = playbackNotesRef.current.has(i) && !activeNotesRef.current.has(i);
+          
+          drawKey3D(activeKeysCtx, x + 2, mechanicsHeight + pressOffset, keyWidth - 4, keyHeight - 4, isPressed, false, isPlayback);
+
+          // Check neighbors and add them to the redraw set if they are black keys
+          if (isBlack(i - 1)) staticBlackKeysToRedraw.add(i - 1);
+          if (isBlack(i + 1)) staticBlackKeysToRedraw.add(i + 1);
+        }
         whiteIndex++;
       }
     }
 
-    // Black keys
+    // Now, draw all BLACK keys that are either animating OR need to be
+    // redrawn because a neighboring white key is active.
     whiteIndex = 0;
     for (let i = 21; i <= 108; i++) {
       if (!isBlack(i)) {
         whiteIndex++;
       } else {
-        const x = (whiteIndex - 1) * keyWidth + keyWidth * 0.7;
         const anim = keyAnimationsRef.current.get(i);
-        const isPressed = anim ? anim.progress > 0.5 : false;
-        const pressOffset = anim ? anim.progress * 6 : 0;
-        const isPlayback = playbackNotesRef.current.has(i) && !activeNotesRef.current.has(i);
+        const isActive = anim && anim.progress > 0;
         
-        drawKey3D(ctx, x, mechanicsHeight + pressOffset, keyWidth * 0.6, keyHeight * 0.6, isPressed, true, isPlayback);
+        if (isActive || staticBlackKeysToRedraw.has(i)) {
+          const x = (whiteIndex - 1) * keyWidth + keyWidth * 0.7;
+          const progress = anim ? anim.progress : 0;
+          const pressOffset = progress * 6;
+          
+          // Determine the key's state for drawing
+          const isPressed = isActive ? anim.progress > 0.5 : false;
+          const isPlayback = isActive ? (playbackNotesRef.current.has(i) && !activeNotesRef.current.has(i)) : false;
+
+          drawKey3D(activeKeysCtx, x, mechanicsHeight + pressOffset, keyWidth * 0.6, keyHeight * 0.6, isPressed, true, isPlayback);
+        }
       }
     }
-  }, [drawStrings, drawHammers, drawKey3D, isBlack, keyWidth, keyHeight, mechanicsHeight, environment, playbackNotesRef, activeNotesRef]);
+    // --- END OF MODIFIED LOGIC ---
 
+  }, [drawStrings, drawHammers, drawKey3D, isBlack, keyWidth, keyHeight, mechanicsHeight]);
+
+  // Main animation loop starter
   const animateKey = useCallback((note: number, isPressed: boolean) => {
     if (!keyAnimationsRef.current.has(note)) {
       keyAnimationsRef.current.set(note, { progress: 0, target: 0 });
     }
-    
     const anim = keyAnimationsRef.current.get(note)!;
     anim.target = isPressed ? 1 : 0;
     
     if (!animationIdRef.current) {
       const animate = () => {
         let needsUpdate = false;
-        
-        for (const [, anim] of keyAnimationsRef.current) {
+        keyAnimationsRef.current.forEach((anim) => {
           const diff = anim.target - anim.progress;
           if (Math.abs(diff) > 0.01) {
-            anim.progress += diff * 0.15; // Smooth easing
+            anim.progress += diff * 0.15;
             needsUpdate = true;
           } else {
             anim.progress = anim.target;
           }
-        }
+        });
         
         if (needsUpdate) {
-          drawPiano();
+          drawAnimatedLayers(); // Call the optimized drawing function
           animationIdRef.current = requestAnimationFrame(animate);
         } else {
           animationIdRef.current = null;
+          drawAnimatedLayers(); // Final draw to ensure correct state
         }
       };
       animate();
     }
-  }, [drawPiano]);
+  }, [drawAnimatedLayers]);
+  
+  // Initial draw of the static background layer
+  useEffect(() => {
+    const canvas = backgroundCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Background gradient for key area
+    const bgGradient = ctx.createLinearGradient(0, mechanicsHeight, 0, canvas.height);
+    if (environment === 'nature') {
+        bgGradient.addColorStop(0, '#f0fdf4');
+        bgGradient.addColorStop(1, '#dcfce7');
+    } else if (environment === 'cosmic') {
+        bgGradient.addColorStop(0, '#f8fafc');
+        bgGradient.addColorStop(1, '#e0e7ff');
+    } else {
+        bgGradient.addColorStop(0, '#f8fafc');
+        bgGradient.addColorStop(1, '#e2e8f0');
+    }
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, mechanicsHeight, canvas.width, keyHeight);
+    
+    // Bottom transition gradient
+    const transitionGradient = ctx.createLinearGradient(0, canvas.height - 5, 0, canvas.height);
+    transitionGradient.addColorStop(0, '#94a3b8');
+    transitionGradient.addColorStop(1, '#000000');
+    ctx.fillStyle = transitionGradient;
+    ctx.fillRect(0, canvas.height - 5, canvas.width, 40);
+    
+    // Draw all keys in their "up" state once
+    let whiteIndex = 0;
+    for (let i = 21; i <= 108; i++) {
+      if (!isBlack(i)) {
+        const x = whiteIndex * keyWidth;
+        drawKey3D(ctx, x + 2, mechanicsHeight, keyWidth - 4, keyHeight - 4, false, false, false);
+        whiteIndex++;
+      }
+    }
+    whiteIndex = 0;
+    for (let i = 21; i <= 108; i++) {
+      if (!isBlack(i)) {
+        whiteIndex++;
+      } else {
+        const x = (whiteIndex - 1) * keyWidth + keyWidth * 0.7;
+        drawKey3D(ctx, x, mechanicsHeight, keyWidth * 0.6, keyHeight * 0.6, false, true, false);
+      }
+    }
+    
+    // Initial draw of animated layers
+    drawAnimatedLayers();
+  }, [drawAnimatedLayers, drawKey3D, isBlack, keyWidth, keyHeight, mechanicsHeight, environment]);
+
+  // All subsequent logic (MIDI, pointer events, etc.) remains largely the same
+  // as it only manipulates state and calls animateKey, which now triggers the optimized render.
 
   const handleMIDIMessage = useCallback((message: MIDIMessageEvent) => {
     if (!message.data || message.data.length < 3) return;
-    
     const [command, note, velocity] = Array.from(message.data);
     const isNoteOn = command === 144 && velocity > 0;
     const isNoteOff = command === 128 || (command === 144 && velocity === 0);
-
-    console.log(`MIDI: command=${command}, note=${note}, velocity=${velocity}, isNoteOn=${isNoteOn}, isNoteOff=${isNoteOff}`);
 
     if (isNoteOn) {
       activeNotesRef.current.add(note);
       animateKey(note, true);
       playNote(note, velocity);
       onNoteOn?.(note, velocity);
- 
     } else if (isNoteOff) {
       activeNotesRef.current.delete(note);
       animateKey(note, false);
       stopNote(note);
       onNoteOff?.(note);
-    
     }
   }, [playNote, stopNote, animateKey, onNoteOn, onNoteOff]);
-
+  
   useEffect(() => {
     const initializeMIDI = async () => {
       if (!navigator.requestMIDIAccess) {
@@ -487,23 +514,15 @@ export function Piano({
     initializeMIDI();
   }, [handleMIDIMessage, onMidiStatusChange]);
 
-
-
-  // NEW: Function to clear playback visualization
   const clearPlaybackVisualization = useCallback(() => {
+    playbackNotesRef.current.forEach(note => {
+        if (!activeNotesRef.current.has(note)) {
+            animateKey(note, false);
+        }
+    });
     playbackNotesRef.current.clear();
-    // Reset all key animations for playback
-    for (let note = 21; note <= 108; note++) {
-      const anim = keyAnimationsRef.current.get(note);
-      if (anim && anim.target === 1 && activeNotesRef.current.has(note)) {
-        // Keep user-pressed keys as they are
-        continue;
-      } else if (anim && anim.target === 1) {
-        // Reset playback keys
-        animateKey(note, false);
-      }
-    }
-  }, []);
+  }, [animateKey]);
+
 
   // Expose synchronized playback functions to parent
   useEffect(() => {
@@ -591,68 +610,43 @@ export function Piano({
     };
   }, [clearPlaybackVisualization, animateKey]);
 
-  // Map x/y to MIDI note number
+
   const getNoteFromCoords = useCallback((x: number, y: number): number | null => {
-    // Only allow interaction in the key area
+    // Unchanged
     if (y < mechanicsHeight) return null;
-    // First, check black keys (drawn on top)
     let whiteIndex = 0;
     for (let i = 21; i <= 108; i++) {
       if (!isBlack(i)) {
         whiteIndex++;
       } else {
         const keyX = (whiteIndex - 1) * keyWidth + keyWidth * 0.7;
-        const keyY = mechanicsHeight;
-        const width = keyWidth * 0.6;
-        const height = keyHeight * 0.6;
-        if (
-          x >= keyX && x <= keyX + width &&
-          y >= keyY && y <= keyY + height
-        ) {
+        if (x >= keyX && x <= keyX + keyWidth * 0.6 && y <= mechanicsHeight + keyHeight * 0.6) {
           return i;
         }
       }
     }
-    // Then, check white keys
+    const keyIndex = Math.floor(x / keyWidth);
     whiteIndex = 0;
     for (let i = 21; i <= 108; i++) {
-      if (!isBlack(i)) {
-        const keyX = whiteIndex * keyWidth;
-        const keyY = mechanicsHeight;
-        const width = keyWidth;
-        const height = keyHeight;
-        if (
-          x >= keyX && x <= keyX + width &&
-          y >= keyY && y <= keyY + height
-        ) {
-          return i;
+        if (!isBlack(i)) {
+            if (whiteIndex === keyIndex) return i;
+            whiteIndex++;
         }
-        whiteIndex++;
-      }
     }
     return null;
   }, [isBlack, keyWidth, keyHeight, mechanicsHeight]);
 
-  // Handle pointer events
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
+    // Pointer event handling - unchanged
+    const container = backgroundCanvasRef.current?.parentElement;
+    if (!container) return;
+    
     const getRelativeCoords = (e: MouseEvent | TouchEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      let clientX: number, clientY: number;
-      if ('touches' in e && e.touches.length > 0) {
-        clientX = e.touches[0].clientX;
-        clientY = e.touches[0].clientY;
-      } else if ('clientX' in e) {
-        clientX = e.clientX;
-        clientY = e.clientY;
-      } else {
-        return { x: 0, y: 0 };
-      }
-      // Scale to canvas coordinates
-      const x = ((clientX - rect.left) / rect.width) * canvas.width;
-      const y = ((clientY - rect.top) / rect.height) * canvas.height;
+      const rect = container.getBoundingClientRect();
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      const x = ((clientX - rect.left) / rect.width) * 1400;
+      const y = ((clientY - rect.top) / rect.height) * 300;
       return { x, y };
     };
 
@@ -678,25 +672,19 @@ export function Piano({
       const { x, y } = getRelativeCoords(e);
       const note = getNoteFromCoords(x, y);
       if (note !== pointerNoteRef.current) {
-        // Release previous note
         if (pointerNoteRef.current !== null) {
           activeNotesRef.current.delete(pointerNoteRef.current);
           animateKey(pointerNoteRef.current, false);
-          if (isSoundOn) {
-            stopNote(pointerNoteRef.current);
-            onNoteOff?.(pointerNoteRef.current);
-          }
+          if (isSoundOn) stopNote(pointerNoteRef.current);
+          onNoteOff?.(pointerNoteRef.current);
         }
-        // Press new note
         if (note !== null) {
           pointerNoteRef.current = note;
           if (!activeNotesRef.current.has(note)) {
             activeNotesRef.current.add(note);
             animateKey(note, true);
-            if (isSoundOn) {
-              playNote(note, 100);
-              onNoteOn?.(note, 100);
-            }
+            if (isSoundOn) playNote(note, 100);
+            onNoteOn?.(note, 100);
           }
         } else {
           pointerNoteRef.current = null;
@@ -709,76 +697,80 @@ export function Piano({
       if (pointerNoteRef.current !== null) {
         activeNotesRef.current.delete(pointerNoteRef.current);
         animateKey(pointerNoteRef.current, false);
-        if (isSoundOn) {
-          stopNote(pointerNoteRef.current);
-          onNoteOff?.(pointerNoteRef.current);
-        }
+        if (isSoundOn) stopNote(pointerNoteRef.current);
+        onNoteOff?.(pointerNoteRef.current);
         pointerNoteRef.current = null;
       }
     };
 
-    // Mouse events
-    canvas.addEventListener('mousedown', handlePointerDown);
+    container.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('mousemove', handlePointerMove);
     window.addEventListener('mouseup', handlePointerUp);
-    // Touch events
-    canvas.addEventListener('touchstart', handlePointerDown);
+    container.addEventListener('touchstart', handlePointerDown, { passive: true });
     window.addEventListener('touchmove', handlePointerMove);
     window.addEventListener('touchend', handlePointerUp);
 
     return () => {
-      canvas.removeEventListener('mousedown', handlePointerDown);
+      container.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('mousemove', handlePointerMove);
       window.removeEventListener('mouseup', handlePointerUp);
-      canvas.removeEventListener('touchstart', handlePointerDown);
+      container.removeEventListener('touchstart', handlePointerDown);
       window.removeEventListener('touchmove', handlePointerMove);
       window.removeEventListener('touchend', handlePointerUp);
     };
   }, [getNoteFromCoords, playNote, stopNote, animateKey, onNoteOn, onNoteOff, isSoundOn]);
 
-  useEffect(() => {
-    drawPiano();
-  }, [drawPiano]);
-
   return (
     <div className="flex justify-center w-full mt-12 px-4">
-      <div className="relative rounded-lg overflow-hidden max-w-full shadow-xl">
-        <canvas 
-          ref={canvasRef}
-          width="1400" 
-          height="300" 
-          className="block mx-auto bg-gray-100 border-2 border-gray-400 rounded-lg max-w-full h-auto"
+      <div 
+        className="relative rounded-lg overflow-hidden max-w-full shadow-xl bg-gray-100 border-2 border-gray-400"
+        style={{ width: '1400px', height: '300px', maxWidth: '100%' }}
+      >
+        <canvas
+          ref={backgroundCanvasRef}
+          width="1400"
+          height="300"
+          style={{ position: 'absolute', top: 0, left: 0, zIndex: 1, width: '100%', height: '100%' }}
+        />
+        <canvas
+          ref={activeKeysCanvasRef}
+          width="1400"
+          height="300"
+          style={{ position: 'absolute', top: 0, left: 0, zIndex: 2, width: '100%', height: '100%' }}
+        />
+        <canvas
+          ref={mechanicsCanvasRef}
+          width="1400"
+          height="300"
           style={{ 
-            maxWidth: '100%', 
-            height: 'auto',
+            position: 'absolute', 
+            top: 0, 
+            left: 0, 
+            zIndex: 3, 
+            width: '100%', 
+            height: '100%',
             opacity: isSoundOn ? 1 : 0.5,
             transition: 'opacity 0.3s ease-in-out'
           }}
         />
         {!isSoundOn && (
-         
-              <button
-                onClick={() => {
-                  // This will be handled by the parent component
-                  const event = new CustomEvent('startSound');
-                  window.dispatchEvent(event);
-                }}
-                className="absolute inset-0 flex items-center justify-center  dark:bg-black/20 bg-white/20 rounded-lg text-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all duration-600 transform hover:scale-105"
-              >
-                <span className="flex items-center gap-2 opacity-90 text-lg backdrop-blur-lg p-2 px-4 rounded-lg
-
-">
-                  Press to Play
-                </span>
-              </button>
-        
+          <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 4, width: '100%', height: '100%' }}>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('startSound'))}
+              className="absolute inset-0 flex items-center justify-center w-full h-full dark:bg-black/20 bg-white/20 rounded-lg text-lg hover:bg-black/10 dark:hover:bg-white/10 transition-all duration-600 transform hover:scale-105"
+            >
+              <span className="flex items-center gap-2 opacity-90 text-lg backdrop-blur-lg p-2 px-4 rounded-lg">
+                Press to Play
+              </span>
+            </button>
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-// Extend window type for global functions
+// Global window type extension - unchanged
 declare global {
   interface Window {
     playNote?: (note: number, velocity: number) => void;
