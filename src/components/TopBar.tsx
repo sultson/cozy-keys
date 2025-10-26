@@ -67,7 +67,7 @@ export function TopBar({
         </div>
 
         {/* Environments - centered for desktop, top row for mobile */}
-        <div className="md:absolute md:right-1/2 md:transform md:-translate-x-1/2 order-first md:order-none">
+        <div className="md:absolute right-1/2">
           <Environments onEnvironmentChange={onEnvironmentChange} />
         </div>
 
@@ -86,15 +86,15 @@ export function TopBar({
                 size="icon"
                 variant={showSettings ? "default" : "outline"}
                 onClick={onSettingsToggle}
-                className="h-8 w-8 md:h-10 md:w-10"
+                className="h-9 w-9"
               >
-                <Settings2 className="w-4 h-4 md:w-5 md:h-5" />
+                <Settings2 className="w-4 h-4" />
               </Button>
             </div>
           </div>
 
           {/* Second row: Cora and Recording */}
-          <div className="flex items-center justify-between md:justify-center gap-2 w-full md:w-auto px-2 md:px-0">
+          <div className="flex items-center justify-between md:justify-center gap-5 w-full md:w-auto px-2 md:px-0">
             <Cora
               isCoraActive={isCoraActive}
               isCoraConnecting={isCoraConnecting}
