@@ -15,9 +15,9 @@ export default function Cora({ isCoraActive, isCoraConnecting, toggleCora, toggl
 
   return (
     <>
-    {/* Learn with Cora Buttons */}
+    {/* Chords with Cora Buttons */}
     {!isCoraActive && !isCoraConnecting && (
-                <Button 
+                <Button  
                   variant="secondary"
                   onClick={toggleCora}
                   className="transition-all duration-200
@@ -28,10 +28,10 @@ export default function Cora({ isCoraActive, isCoraConnecting, toggleCora, toggl
                     focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:outline-none
                     active:scale-100 active:shadow-md
                     hover:scale-105 hover:shadow-xl"
-                  title={coraError || 'Learn with Cora'}
+                  title={coraError || 'Chords with Cora'}
                 >
                   <BookHeart className="w-4 h-4 mr-2 text-indigo-500 group-hover:text-indigo-700 dark:text-indigo-300 dark:group-hover:text-indigo-100 transition-colors duration-200" />
-                  <span className="font-semibold tracking-wide">Learn with Cora</span>
+                  <span className="font-semibold tracking-wide">Chords with Cora</span>
                 </Button>
               )}
               
