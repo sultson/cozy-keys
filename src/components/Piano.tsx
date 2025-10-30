@@ -43,12 +43,23 @@ export function Piano({
   const pointerDownRef = useRef<boolean>(false);
   const pointerNoteRef = useRef<number | null>(null);
   const isMidiConnectedRef = useRef<boolean>(false);
+  const pressedKeysRef = useRef<Set<string>>(new Set());
 
   // Piano dimensions - unchanged
   const whiteKeys = 52;
   const keyWidth = 1400 / whiteKeys;
   const keyHeight = 200;
   const mechanicsHeight = 100;
+
+  // Keyboard mapping: computer keys to MIDI notes
+  const keyboardMapping = useCallback((): Record<string, number> => ({
+    // Lower row: C4 to C5 (MIDI 60-72)
+    'z': 48, 's': 49, 'x': 50, 'd': 51, 'c': 52, 'v': 53, 'g': 54, 'b': 55, 'h': 56, 'n': 57, 'j': 58, 'm': 59, ',': 60,
+    // Upper row: C5 to C6 (MIDI 72-84)
+    'q': 72, '2': 73, 'w': 74, '3': 75, 'e': 76, 'r': 77, '5': 78, 't': 79, '6': 80, 'y': 81, '7': 82, 'u': 83,
+    // Additional keys for extended range
+    'i': 84, '9': 85, 'o': 86, '0': 87, 'p': 88,
+  }), []);
 
   const isBlack = useCallback((note: number): boolean => {
     return [1, 3, 6, 8, 10].includes(note % 12);
@@ -809,6 +820,65 @@ export function Piano({
       window.removeEventListener('touchend', handlePointerUp);
     };
   }, [getNoteFromCoords, playNote, stopNote, animateKey, onNoteOn, onNoteOff, isSoundOn]);
+
+  // Keyboard event handling
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input field
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      const mapping = keyboardMapping();
+
+      if (mapping[key] && !pressedKeysRef.current.has(key)) {
+        pressedKeysRef.current.add(key);
+        const note = mapping[key];
+
+        if (!activeNotesRef.current.has(note)) {
+          activeNotesRef.current.add(note);
+          animateKey(note, true);
+          if (isSoundOn) {
+            playNote(note, 100);
+            onNoteOn?.(note, 100);
+          }
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input field
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      const mapping = keyboardMapping();
+
+      if (mapping[key] && pressedKeysRef.current.has(key)) {
+        pressedKeysRef.current.delete(key);
+        const note = mapping[key];
+
+        if (activeNotesRef.current.has(note)) {
+          activeNotesRef.current.delete(note);
+          animateKey(note, false);
+          if (isSoundOn) {
+            stopNote(note);
+            onNoteOff?.(note);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [keyboardMapping, playNote, stopNote, animateKey, onNoteOn, onNoteOff, isSoundOn]);
 
   return (
     <div className="flex justify-center w-full mt-12 px-4">
