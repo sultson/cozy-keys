@@ -14,7 +14,18 @@ import { CountdownOverlay } from './components/CountdownOverlay';
 import useAuth from './hooks/useAuth';
 import Settings from './Settings';
 import Lessons from './components/Lessons';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
+import { Help } from './components/Help';
+import { Info } from './components/Info';
+import { Button } from './components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './components/ui/dialog';
 
 
 function App() {
@@ -25,6 +36,8 @@ function App() {
   const [showCountdown, setShowCountdown] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [isCoraConnecting, setIsCoraConnecting] = useState(false);
+  const [showCoraConfirm, setShowCoraConfirm] = useState(false);
+  const [coraTimeoutId, setCoraTimeoutId] = useState<NodeJS.Timeout | null>(null);
   const { session } = useAuth();
   const userId = session?.user?.id;
   const { 
@@ -117,6 +130,15 @@ function App() {
     }
   }, [isCoraConnected, isCoraConnecting]);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (coraTimeoutId) {
+        clearTimeout(coraTimeoutId);
+      }
+    };
+  }, [coraTimeoutId]);
+
   const handleNoteOff = (note: number) => {
     console.log(`App: handleNoteOff called with note=${note}, isRecording=${isRecording}`);
     recordEvent('off', note, 0);
@@ -148,21 +170,43 @@ function App() {
 
   const toggleCora = async () => {
     if (isCoraActive) {
+      // Clear timeout if user manually stops session
+      if (coraTimeoutId) {
+        clearTimeout(coraTimeoutId);
+        setCoraTimeoutId(null);
+      }
       stopCoraSession();
       setIsCoraConnecting(false);
     } else {
-      setIsCoraConnecting(true);
-      try {
-        // Initialize audio first if needed
-        if (!soundReady) {
-          await initializeAudio();
-        }
-        await startCoraSession();
-        // Connection state will be handled by the useAgent hook
-      } catch (error) {
-        console.error('Failed to start Cora:', error);
-        setIsCoraConnecting(false);
+      // Show confirmation modal before starting session
+      setShowCoraConfirm(true);
+    }
+  };
+
+  const confirmStartCora = async () => {
+    setShowCoraConfirm(false);
+    setIsCoraConnecting(true);
+    try {
+      // Initialize audio first if needed
+      if (!soundReady) {
+        await initializeAudio();
       }
+      await startCoraSession();
+
+      // Set up 5-minute timeout
+      const timeoutId = setTimeout(() => {
+        stopCoraSession();
+        setIsCoraConnecting(false);
+        setCoraTimeoutId(null);
+        toast.info('Conversations are currently limited to 5 minutes');
+      }, 5 * 60 * 1000); // 5 minutes
+
+      setCoraTimeoutId(timeoutId);
+
+      // Connection state will be handled by the useAgent hook
+    } catch (error) {
+      console.error('Failed to start Cora:', error);
+      setIsCoraConnecting(false);
     }
   };
 
@@ -226,7 +270,7 @@ function App() {
         )}
     
         <ErrorBoundary fallback={<div>Could not load recordings</div>}>
-        <RecordingsList 
+        <RecordingsList
           recordings={recordings}
           isSoundOn={isSoundOn}
           userId={userId}
@@ -237,6 +281,29 @@ function App() {
           isLoadingMore={isLoadingMore}
         />
       </ErrorBoundary>
+      <Help />
+      <Info />
+
+      {/* Cora Confirmation Modal */}
+      <Dialog open={showCoraConfirm} onOpenChange={setShowCoraConfirm}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Early Preview - Chords with Cora</DialogTitle>
+            <DialogDescription>
+              This is an early preview of handling composition tools to an agent and is subject to limits and problems.
+              Things might not work as you expect.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCoraConfirm(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmStartCora}>
+              Okay
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </div>
       <Toaster position="top-center" theme={theme} />
     </ThemeProvider>
