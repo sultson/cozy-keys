@@ -18,7 +18,7 @@ const Settings = ({
 }) => {
   return (
     <div
-      className={`absolute bottom-0 left-0 right-0 p-32 bg-background/80 backdrop-blur ${
+      className={`absolute bottom-0 left-0 right-0 p-32 bg-background/80 backdrop-blur z-50 ${
         showSettings ? "block" : "hidden"
       } flex flex-col items-start justify-center h-full gap-4`}
     >

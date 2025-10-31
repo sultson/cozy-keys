@@ -82,14 +82,14 @@ export function TopBar({
             />
             <div className="flex items-center gap-2">
               <ModeToggle />
-              <Button
+              {/* <Button
                 size="icon"
                 variant={showSettings ? "default" : "outline"}
                 onClick={onSettingsToggle}
                 className="h-9 w-9"
               >
                 <Settings2 className="w-4 h-4" />
-              </Button>
+              </Button> */}
             </div>
           </div>
 
@@ -107,10 +107,18 @@ export function TopBar({
               size="icon"
               variant={isRecording ? "destructive" : "default"}
               onClick={onToggleRecording}
-              className={`rounded-full h-8 w-8 md:h-10 md:w-10 ${isRecording ? 'animate-pulse' : ''}`}
+              className={`rounded-full h-8 w-8 md:h-10 md:w-10 transition-all duration-200 hover:scale-105 active:scale-95 ${
+                isRecording
+                  ? 'animate-pulse shadow-lg shadow-red-500/50 dark:shadow-red-400/30 bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 border-2 border-red-400 dark:border-red-500'
+                  : 'shadow-xl shadow-black/30 dark:shadow-white/20 bg-gradient-to-br from-gray-600 to-gray-700 dark:from-gray-200 dark:to-gray-100 hover:from-gray-700 hover:to-gray-800 dark:hover:from-gray-100 dark:hover:to-gray-50 border-2 border-gray-700 dark:border-gray-300'
+              }`}
               title={isRecording ? 'Stop Recording' : 'Start Recording'}
             >
-              <Mic className="w-4 h-4 md:w-5 md:h-5" />
+              <Mic className={`w-4 h-4 md:w-5 md:h-5 transition-colors ${
+                isRecording
+                  ? 'text-white drop-shadow-sm'
+                  : 'text-white dark:text-gray-900 drop-shadow-sm'
+              }`} />
             </Button>
           </div>
         </div>

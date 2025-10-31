@@ -11,14 +11,11 @@ const EGG_USER_KEY = 'isEggUser';
 
 export function Help() {
   const [isOpen, setIsOpen] = useState(false);
-  const [_isEggUser, setIsEggUser] = useState(true);
 
   useEffect(() => {
     // Check if user is new (egg user)
     const storedEggUser = localStorage.getItem(EGG_USER_KEY);
     const isNewUser = storedEggUser === null || storedEggUser === 'true';
-
-    setIsEggUser(isNewUser);
 
     // Auto-open popover for new users
     if (isNewUser) {
@@ -28,7 +25,6 @@ export function Help() {
 
   const handleLetsGo = () => {
     setIsOpen(false);
-    setIsEggUser(false);
     localStorage.setItem(EGG_USER_KEY, 'false');
   };
 
@@ -46,7 +42,7 @@ export function Help() {
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-96 max-w-[90vw] p-6"
+          className="w-[28rem] max-w-[90vw] p-6"
           align="end"
           side="top"
           sideOffset={12}
@@ -57,7 +53,7 @@ export function Help() {
                 Welcome to Cozy Keys!
               </h3>
               <p className="text-sm text-muted-foreground">
-                Your virtual piano companion. Here's how to get started:
+                Your virtual piano companion.
               </p>
             </div>
 
@@ -78,7 +74,7 @@ export function Help() {
                   Record Your Play
                 </h4>
                 <p className="text-sm text-muted-foreground ml-8">
-                  Press the red record button to start recording. Play your melody, then press again to stop. Your recording will be saved automatically.
+                  Press the record button to start recording. Play your melody, then press again to stop and save your recording.
                 </p>
               </div>
 
@@ -88,7 +84,7 @@ export function Help() {
                   Share & Playback
                 </h4>
                 <p className="text-sm text-muted-foreground ml-8">
-                  View your recordings below the piano. Make them public to share, or keep private. Listen to recordings with synchronized piano playback, and download in MIDI or audio format.
+                  Recordings appear below the piano. Make them public to share, or keep private.
                 </p>
               </div>
 
@@ -98,7 +94,7 @@ export function Help() {
                   Sound Presets
                 </h4>
                 <p className="text-sm text-muted-foreground ml-8">
-                  Choose from different instrument presets using the dropdown in the top bar. Try different piano types and sounds to find your favorite.
+                  Choose from different instrument/synth presets using the dropdown in the top bar.
                 </p>
               </div>
 
@@ -108,7 +104,7 @@ export function Help() {
                   Environment Selector
                 </h4>
                 <p className="text-sm text-muted-foreground ml-8">
-                  Change the visual environment around your piano. Switch between quiet, nature, and cosmic themes to create your perfect atmosphere.
+                  Switch between studio, nature, and cosmic environments to create your perfect atmosphere.
                 </p>
               </div>
             </div>
