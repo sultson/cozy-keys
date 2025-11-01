@@ -146,6 +146,62 @@ export default function RecordingDetail() {
     }
   };
 
+  const handleDownload = async (url: string, baseFilename: string, isAudio: boolean = true) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      
+      // Determine file extension from Content-Type header or blob type
+      let extension = 'wav'; // default fallback
+      if (isAudio) {
+        const contentType = response.headers.get('content-type') || blob.type || '';
+        if (contentType.includes('webm')) {
+          extension = 'webm';
+        } else if (contentType.includes('mp4')) {
+          extension = 'mp4';
+        } else if (contentType.includes('ogg')) {
+          extension = 'ogg';
+        } else if (contentType.includes('wav')) {
+          extension = 'wav';
+        } else if (contentType.includes('mpeg') || contentType.includes('mp3')) {
+          extension = 'mp3';
+        } else {
+          // Try to infer from URL
+          const urlLower = url.toLowerCase();
+          if (urlLower.includes('.webm')) extension = 'webm';
+          else if (urlLower.includes('.mp4')) extension = 'mp4';
+          else if (urlLower.includes('.ogg')) extension = 'ogg';
+          else if (urlLower.includes('.mp3')) extension = 'mp3';
+          else if (urlLower.includes('.wav')) extension = 'wav';
+        }
+      } else {
+        extension = 'mid'; // MIDI files
+      }
+      
+      // Remove any existing extension from baseFilename and add the correct one
+      const filenameWithoutExt = baseFilename.replace(/\.[^/.]+$/, '');
+      const finalFilename = `${filenameWithoutExt}.${extension}`;
+      
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = finalFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      // Fallback to direct link if fetch fails
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = baseFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   const handleTogglePublic = async () => {
     if (!recording?.id) return;
     try {
@@ -373,30 +429,36 @@ export default function RecordingDetail() {
               <div className="flex items-center gap-1">
                 {/* Download Audio Button */}
                 {recording.audio && (
-                  <a href={recording.audio} download={`${recording.title}.wav`} target="_blank">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-gray-500 hover:text-blue-500"
-                    >
-                      <Download className="h-4 w-4 mr-1.5" />
-                      Audio
-                    </Button>
-                  </a>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-gray-500 hover:text-blue-500"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDownload(recording.audio!, recording.title, true);
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-1.5" />
+                    Audio
+                  </Button>
                 )}
 
                 {/* Download MIDI Button */}
                 {recording.midi && (
-                  <a href={recording.midi} download={`${recording.title}.mid`} target="_blank">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-gray-500 hover:text-blue-500"
-                    >
-                      <Download className="h-4 w-4 mr-1.5" />
-                      MIDI
-                    </Button>
-                  </a>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-gray-500 hover:text-blue-500"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDownload(recording.midi!, recording.title, false);
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-1.5" />
+                    MIDI
+                  </Button>
                 )}
               </div>
 
