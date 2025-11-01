@@ -1,5 +1,6 @@
 import supabase from './supabase';
 import type { Recording, RecordingEvent } from '../hooks/useRecording';
+import type { SoundPreset } from '../hooks/useSound';
 import { ticksToMs, MICROSECONDS_PER_QUARTER } from '../utils/midiTiming';
 
 export interface RecordingData {
@@ -14,6 +15,7 @@ export interface RecordingData {
   created_by?: string;
   is_public?: boolean;
   hearts?: string[]; // Array of author IDs who hearted this recording
+  preset?: SoundPreset | null; // Sound preset used for this recording
 }
 
 export interface UploadRecordingParams {
@@ -237,7 +239,8 @@ export async function uploadRecording({ recording, title, country, isPublic = fa
         duration,
         events_count: eventsCount,
         is_public: isPublic,
-        hearts: [] // Initialize empty hearts array
+        hearts: [], // Initialize empty hearts array
+        preset: recording.preset || null // Store preset if available
       })
       .select()
       .single();

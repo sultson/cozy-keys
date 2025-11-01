@@ -156,7 +156,7 @@ function App() {
     if (!soundReady) {
       await initializeAudio();
     }
-    startRecording();
+    startRecording(currentPreset);
   };
 
   const toggleRecording = async () => {

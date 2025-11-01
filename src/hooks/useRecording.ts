@@ -3,6 +3,7 @@ import * as Tone from 'tone';
 import { getRecordingsPaginated, uploadRecording, getUserCountry, type RecordingData } from '../lib/api';
 import { msToTicks, MICROSECONDS_PER_QUARTER } from '../utils/midiTiming';
 import { toast } from 'sonner';
+import type { SoundPreset } from './useSound';
 
 export interface RecordingEvent {
   type: 'on' | 'off';
@@ -18,13 +19,14 @@ export interface Recording {
   audioUrl?: string | null;
   midiUrl?: string | null;
   mp3Url?: string | null;
+  preset?: SoundPreset | null;
 }
 
 interface UseRecordingReturn {
   isRecording: boolean;
   recordings: RecordingData[];
   isLoading: boolean;
-  startRecording: () => void;
+  startRecording: (preset?: SoundPreset) => void;
   stopRecording: () => void;
   recordEvent: (type: 'on' | 'off', note: number, velocity: number) => void;
   refreshRecordings: () => Promise<void>;
@@ -113,6 +115,7 @@ export function useRecording(): UseRecordingReturn {
   const midiUrlRef = useRef<string | null>(null);
   const wavUrlRef = useRef<string | null>(null);
   const toneConnectedRef = useRef<boolean>(false);
+  const refreshRecordingsRef = useRef<(() => Promise<void>) | null>(null);
 
   const now = useCallback(() => performance.now(), []);
 
@@ -236,7 +239,7 @@ export function useRecording(): UseRecordingReturn {
     return destRef.current;
   }, []);
 
-  const startRecording = useCallback(() => {
+  const startRecording = useCallback((preset?: SoundPreset) => {
     if (isRecording) return;
     console.log('Starting recording...');
     setIsRecording(true);
@@ -249,6 +252,7 @@ export function useRecording(): UseRecordingReturn {
       timestamp: new Date(),
       audioUrl: null,
       midiUrl: null,
+      preset: preset || null,
     };
     console.log('Recording started, currentRecordingRef set:', currentRecordingRef.current);
     
@@ -348,7 +352,9 @@ export function useRecording(): UseRecordingReturn {
           if (result) {
             console.log('Recording uploaded successfully');
             toast.success('Saved', { id: toastId });
-            await refreshRecordings();
+            if (refreshRecordingsRef.current) {
+              await refreshRecordingsRef.current();
+            }
           } else {
             console.error('Failed to upload recording');
             toast.error('Failed to save', { id: toastId });
@@ -410,6 +416,9 @@ export function useRecording(): UseRecordingReturn {
       setIsLoading(false);
     }
   }, []);
+
+  // Store refreshRecordings in ref so it can be accessed in stopRecording
+  refreshRecordingsRef.current = refreshRecordings;
 
   const loadMoreRecordings = useCallback(async (): Promise<void> => {
     if (isLoadingMore || !hasMoreRecordings) return;
