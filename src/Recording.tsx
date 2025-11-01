@@ -2,14 +2,24 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, Play, Square, Download, Heart, Trash2 } from 'lucide-react';
-import { getRecording, deleteRecording, heartRecording, unheartRecording } from './lib/api';
+import { ArrowLeft, Play, Square, Download, Heart, Trash2, Globe as GlobeIcon, Link as LinkIcon } from 'lucide-react';
+import { getRecording, deleteRecording, heartRecording, unheartRecording, toggleRecordingPublic } from './lib/api';
 import type { RecordingData } from './lib/api';
 import { getCountryFlag } from './utils/countryFlags';
 import { timeAgo, formatExactDate } from './utils/timeAgo';
 import { drawWaveform, createWaveformData } from './utils/drawWaveform';
 import { formatDuration } from './utils/formatDuration';
 import useAuth from './hooks/useAuth';
+import type { SoundPreset } from './hooks/useSound';
+
+const presetLabels: Record<SoundPreset, string> = {
+  'grand-piano': 'Grand Piano',
+  'juno': 'Juno Synth',
+  'organ': 'Hammond Organ',
+  'kalimba': 'Kalimba',
+  'moog': 'Moog',
+  'ob-xa-brass': 'OB-Xa Brass',
+};
 
 export default function RecordingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +35,7 @@ export default function RecordingDetail() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
   const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null);
   const [waveformData, setWaveformData] = useState<Float32Array | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -114,6 +125,39 @@ export default function RecordingDetail() {
       }
     } catch (err) {
       console.error('Error unhearting recording:', err);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!recording?.id) return;
+    
+    setIsCopying(true);
+    try {
+      const recordingUrl = `${window.location.origin}/recording/${recording.id}`;
+      await navigator.clipboard.writeText(recordingUrl);
+      
+      // Show brief success feedback
+      setTimeout(() => {
+        setIsCopying(false);
+      }, 1000);
+    } catch (error) {
+      console.error('Error copying link:', error);
+      setIsCopying(false);
+    }
+  };
+
+  const handleTogglePublic = async () => {
+    if (!recording?.id) return;
+    try {
+      const success = await toggleRecordingPublic(recording.id);
+      if (success && recording) {
+        setRecording({
+          ...recording,
+          is_public: !recording.is_public
+        });
+      }
+    } catch (err) {
+      console.error('Error toggling recording public status:', err);
     }
   };
 
@@ -258,9 +302,14 @@ export default function RecordingDetail() {
                       Me
                     </span>
                   )}
-                  <span className="text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
-                    Public
+                  <span className={`text-xs px-2 py-0.5 rounded ${recording.is_public ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300'}`}>
+                    {recording.is_public ? 'Public' : 'Private'}
                   </span>
+                  {recording.preset && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300">
+                      {presetLabels[recording.preset]}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <span title={formatExactDate(timestamp)}>{timeAgo(timestamp)}</span>
@@ -269,38 +318,6 @@ export default function RecordingDetail() {
                     <span>• {durationText}</span>
                   )}
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Heart button */}
-                <div className="flex flex-row justify-center items-center">
-                <Button
-                  size="lg"
-                  variant="ghost"
-                  onClick={isHearted ? handleUnheart : handleHeart}
-                  className={`h-10 w-10 rounded-full ${isHearted ? 'text-red-500' : 'text-gray-500'} hover:text-red-500 relative`}
-                >
-                  <Heart className="h-10 w-10" />
-                 
-                </Button>
-                {recording.hearts && recording.hearts.length > 0 && (
-                    <div className="text-xs text-muted-foreground">
-                      {recording.hearts.length}
-                    </div>
-                  )}
-                  </div>
-                {/* Delete button for own recordings */}
-                {isOwnRecording && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                )}
               </div>
             </div>
 
@@ -349,24 +366,103 @@ export default function RecordingDetail() {
               </div>
             )}
 
-            {/* Download Links */}
-            <div className="flex gap-2 mt-4">
-              {recording.audio && (
-                <a href={recording.audio} download={`${recording.title}.wav`} target="_blank">
-                  <Button variant="outline" size="sm">
-                    <Download className="w-4 h-4 mr-2" />
-                    Audio
+
+            {/* Action buttons row - download buttons on left, action buttons on right */}
+            <div className="flex items-center justify-between gap-1 mt-4 pt-4 border-t border-border">
+              {/* Download buttons on the left */}
+              <div className="flex items-center gap-1">
+                {/* Download Audio Button */}
+                {recording.audio && (
+                  <a href={recording.audio} download={`${recording.title}.wav`} target="_blank">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-gray-500 hover:text-blue-500"
+                    >
+                      <Download className="h-4 w-4 mr-1.5" />
+                      Audio
+                    </Button>
+                  </a>
+                )}
+
+                {/* Download MIDI Button */}
+                {recording.midi && (
+                  <a href={recording.midi} download={`${recording.title}.mid`} target="_blank">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-gray-500 hover:text-blue-500"
+                    >
+                      <Download className="h-4 w-4 mr-1.5" />
+                      MIDI
+                    </Button>
+                  </a>
+                )}
+              </div>
+
+              {/* Action buttons on the right */}
+              <div className="flex items-center gap-1">
+                {/* Toggle Public Button (only for own recordings) */}
+                {isOwnRecording && recording.id && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleTogglePublic}
+                    className={`flex-shrink-0 h-10 w-10 rounded-full text-gray-500 hover:text-blue-500 ${recording.is_public ? 'text-blue-500' : 'text-gray-500'}`}
+                    title={recording.is_public ? 'Make Private' : 'Make Public'}
+                  >
+                    <GlobeIcon className="h-5 w-5" />
                   </Button>
-                </a>
-              )}
-              {recording.midi && (
-                <a href={recording.midi} download={`${recording.title}.mid`} target="_blank">
-                  <Button variant="outline" size="sm">
-                    <Download className="w-4 h-4 mr-2" />
-                   MIDI
+                )}
+
+                {/* Delete Button (only for own recordings) */}
+                {isOwnRecording && recording.id && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="flex-shrink-0 h-10 w-10 rounded-full text-gray-500 hover:text-red-500"
+                    title="Delete recording"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </Button>
-                </a>
-              )}
+                )}
+
+                {/* Copy Link Button */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleCopyLink}
+                  disabled={isCopying}
+                  className="flex-shrink-0 h-10 w-10 rounded-full text-gray-500 hover:text-blue-500 relative"
+                  title="Copy link to clipboard"
+                >
+                  {isCopying ? (
+                    <div className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <LinkIcon className="h-5 w-5" />
+                  )}
+                </Button>
+
+                {/* Heart Button */}
+                {recording.id && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={isHearted ? handleUnheart : handleHeart}
+                    className={`flex-shrink-0 h-10 w-10 rounded-full ${isHearted ? 'text-red-500' : 'text-gray-500'} hover:text-red-500 relative`}
+                    title={isHearted ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <Heart className="h-5 w-5" />
+                    {recording.hearts && recording.hearts.length > 0 && (
+                      <div className="text-xs text-muted-foreground absolute bottom-0 rounded-full w-full">
+                        <span>{recording.hearts.length}</span>
+                      </div>
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

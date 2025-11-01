@@ -11,6 +11,7 @@ import { getCountryFlag } from '../utils/countryFlags';
 import { timeAgo, formatExactDate } from '../utils/timeAgo';
 import { drawWaveform, createWaveformData } from '../utils/drawWaveform';
 import { formatDuration } from '../utils/formatDuration';
+import type { SoundPreset } from '../hooks/useSound';
 import { 
   toggleRecordingPublic, 
   updateRecordingTitle, 
@@ -18,6 +19,15 @@ import {
   heartRecording as heartRecordingApi, 
   unheartRecording as unheartRecordingApi
 } from '../lib/api';
+
+const presetLabels: Record<SoundPreset, string> = {
+  'grand-piano': 'Grand Piano',
+  'juno': 'Juno Synth',
+  'organ': 'Hammond Organ',
+  'kalimba': 'Kalimba',
+  'moog': 'Moog',
+  'ob-xa-brass': 'OB-Xa Brass',
+};
 
 interface RecordingsListProps {
   recordings: RecordingData[];
@@ -317,6 +327,11 @@ function RecordingItem({ recording, userId, onRefresh, onEditTitle }: RecordingI
               <span className={`text-xs px-2 py-0.5 rounded ${recording.is_public ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300'}`}>
                 {recording.is_public ? 'Public' : 'Private'}
                 </span>
+              {recording.preset && (
+                <span className="text-xs px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300">
+                  {presetLabels[recording.preset]}
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1 text-xs text-gray-400">
               <span title={formatExactDate(timestamp)}>{timeAgo(timestamp)}</span>
@@ -326,72 +341,6 @@ function RecordingItem({ recording, userId, onRefresh, onEditTitle }: RecordingI
                 <span>{recording.country}</span>
               </span>
             </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center gap-1">
-            {/* Toggle Public Button (only for own recordings) */}
-            {isOwnRecording && recording.id && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleTogglePublic}
-                className={`flex-shrink-0 h-10 w-10 rounded-full text-gray-500 hover:text-blue-500 ${recording.is_public ? 'text-blue-500' : 'text-gray-500'}`}
-                title={recording.is_public ? 'Make Private' : 'Make Public'}
-              >
-                <GlobeIcon className="h-5 w-5" />
-              </Button>
-            )}
-
-            {/* Delete Button (only for own recordings) */}
-            {isOwnRecording && recording.id && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="text-gray-500"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            )}
-
-            <div className="w-4"/>
-
-            {/* Copy Link Button */}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleCopyLink}
-              disabled={isCopying}
-              className="flex-shrink-0 h-10 w-10 rounded-full text-gray-500 hover:text-blue-500 relative"
-              title="Copy link to clipboard"
-            >
-              {isCopying ? (
-                <div className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <LinkIcon className="h-5 w-5" />
-              )}
-            </Button>
-
-            {/* Heart Button */}
-            {recording.id && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={recording.hearts?.includes(userId || '') ? handleUnheart : handleHeart}
-                className={`flex-shrink-0 h-10 w-10 rounded-full ${recording.hearts?.includes(userId || '') ? 'text-red-500' : 'text-gray-500'} hover:text-red-500 relative`}
-                title={recording.hearts?.includes(userId || '') ? 'Remove from favorites' : 'Add to favorites'}
-              >
-                <Heart className="h-5 w-5" />
-                {recording.hearts && recording.hearts.length > 0 && (
-                  <div className="text-xs text-muted-foreground absolute bottom-0 rounded-full w-full">
-                    <span>{recording.hearts.length}</span>
-                  </div>
-                )}
-              </Button>
-            )}
-
           </div>
 
           {/* Audio waveform and controls */}
@@ -405,29 +354,111 @@ function RecordingItem({ recording, userId, onRefresh, onEditTitle }: RecordingI
             />
             <div className="absolute bottom-1 right-1 flex items-center gap-2 text-muted-foreground  text-xs px-1 py-1 rounded-md">{durationText}</div>
             </div>
-            <div className="flex flex-row gap-2 items-center justify-center sm:flex-col sm:items-end sm:justify-end">
+            <div className="hidden">
               {recording.audio && (
-                <>
-                  <audio ref={audioRef} src={recording.audio} controls className="hidden" />
-                  <a href={recording.audio} download={`${recording.title}.wav`} target="_blank" onClick={(e) => e.stopPropagation()}>
-                    <Button size="sm" variant="outline">
-                      Audio
-                      <Download className="w-4 h-4 ml-1" />
-                    </Button>
-                  </a>
-                </>
-              )}
-              {recording.midi && (
-                <a href={recording.midi} download={`${recording.title}.mid`} target="_blank" onClick={(e) => e.stopPropagation()}>
-                  <Button size="sm" variant="outline">
-                    MIDI
-                    <Download className="w-4 h-4 ml-1" />
-                  </Button>
-                </a>
+                <audio ref={audioRef} src={recording.audio} controls className="hidden" />
               )}
             </div>
           </div>
         </div>
+
+          {/* Action buttons row - download buttons on left, action buttons on right */}
+          <div className="flex items-center justify-between gap-1 mt-2 -mb-2">
+            {/* Download buttons on the left */}
+            <div className="flex items-center gap-1">
+              {/* Download Audio Button */}
+              {recording.audio && (
+                <a href={recording.audio} download={`${recording.title}.wav`} target="_blank" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-gray-500 hover:text-blue-500"
+                  >
+                    <Download className="h-4 w-4 mr-1.5" />
+                    Audio
+                  </Button>
+                </a>
+              )}
+
+              {/* Download MIDI Button */}
+              {recording.midi && (
+                <a href={recording.midi} download={`${recording.title}.mid`} target="_blank" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-gray-500 hover:text-blue-500"
+                  >
+                    <Download className="h-4 w-4 mr-1.5" />
+                    MIDI
+                  </Button>
+                </a>
+              )}
+            </div>
+
+            {/* Action buttons on the right */}
+            <div className="flex items-center gap-1">
+              {/* Toggle Public Button (only for own recordings) */}
+              {isOwnRecording && recording.id && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleTogglePublic}
+                  className={`flex-shrink-0 h-10 w-10 rounded-full text-gray-500 hover:text-blue-500 ${recording.is_public ? 'text-blue-500' : 'text-gray-500'}`}
+                  title={recording.is_public ? 'Make Private' : 'Make Public'}
+                >
+                  <GlobeIcon className="h-5 w-5" />
+                </Button>
+              )}
+
+              {/* Delete Button (only for own recordings) */}
+              {isOwnRecording && recording.id && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-shrink-0 h-10 w-10 rounded-full text-gray-500 hover:text-red-500"
+                  title="Delete recording"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+
+              {/* Copy Link Button */}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleCopyLink}
+                disabled={isCopying}
+                className="flex-shrink-0 h-10 w-10 rounded-full text-gray-500 hover:text-blue-500 relative"
+                title="Copy link to clipboard"
+              >
+                {isCopying ? (
+                  <div className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <LinkIcon className="h-5 w-5" />
+                )}
+              </Button>
+
+              {/* Heart Button */}
+              {recording.id && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={recording.hearts?.includes(userId || '') ? handleUnheart : handleHeart}
+                  className={`flex-shrink-0 h-10 w-10 rounded-full ${recording.hearts?.includes(userId || '') ? 'text-red-500' : 'text-gray-500'} hover:text-red-500 relative`}
+                  title={recording.hearts?.includes(userId || '') ? 'Remove from favorites' : 'Add to favorites'}
+                >
+                  <Heart className="h-5 w-5" />
+                  {recording.hearts && recording.hearts.length > 0 && (
+                    <div className="text-xs text-muted-foreground absolute bottom-0 rounded-full w-full">
+                      <span>{recording.hearts.length}</span>
+                    </div>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
         </CardContent>
     </Card>
     </Link>
